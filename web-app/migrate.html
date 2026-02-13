@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WordLog - 单词小写迁移工具</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+    h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
+    .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+    .status {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      min-height: 150px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    .log { margin: 4px 0; }
+    .log.success { color: #10b981; }
+    .log.error { color: #ef4444; }
+    .log.warning { color: #f59e0b; }
+    .log.info { color: #3b82f6; }
+    .btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: transform 0.2s;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+      margin-top: 10px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔤 WordLog 小写迁移工具</h1>
+    <p class="subtitle">将所有已存储的单词统一转换为小写格式</p>
+    <div class="status" id="status">
+      <div class="log info">👋 点击下方按钮开始迁移...</div>
+    </div>
+    <button class="btn" id="migrateBtn" onclick="startMigration()">开始迁移</button>
+    <button class="btn btn-secondary" id="backBtn" onclick="window.location.href='/'" style="display: none;">返回 WordLog</button>
+  </div>
+  <script>
+    function log(msg, type = 'info') {
+      const status = document.getElementById('status');
+      const div = document.createElement('div');
+      div.className = `log ${type}`;
+      div.textContent = msg;
+      status.appendChild(div);
+      status.scrollTop = status.scrollHeight;
+    }
+    async function startMigration() {
+      const btn = document.getElementById('migrateBtn');
+      const backBtn = document.getElementById('backBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>迁移中...';
+      document.getElementById('status').innerHTML = '';
+      try {
+        log('🔄 开始迁移单词到小写格式...', 'info');
+        const saved = localStorage.getItem('wordlog_words');
+        if (!saved) {
+          log('⚠️ 没有找到需要迁移的单词', 'warning');
+          btn.disabled = false;
+          btn.textContent = '重试';
+          return;
+        }
+        const words = JSON.parse(saved);
+        log(`📦 从 localStorage 读取到 ${words.length} 个单词`, 'info');
+        let modifiedCount = 0;
+        const modifiedWords = [];
+        const migratedWords = words.map(word => {
+          const lowercaseWord = word.word.toLowerCase();
+          const needsUpdate = word.word !== lowercaseWord || word.wordLower !== lowercaseWord;
+          if (needsUpdate) {
+            modifiedCount++;
+            modifiedWords.push({ original: word.word, migrated: lowercaseWord });
+            return { ...word, word: lowercaseWord, wordLower: lowercaseWord, updatedAt: Date.now() };
+          }
+          return word;
+        });
+        if (modifiedCount === 0) {
+          log('✅ 所有单词已经是小写格式，无需迁移', 'success');
+        } else {
+          log(`📝 需要修改 ${modifiedCount} 个单词：`, 'warning');
+          modifiedWords.forEach(({ original, migrated }) => {
+            log(`   "${original}" → "${migrated}"`, 'info');
+          });
+          localStorage.setItem('wordlog_words', JSON.stringify(migratedWords));
+          log('💾 已保存到 localStorage', 'info');
+        }
+        log(`✅ 迁移完成！`, 'success');
+        log(`📊 总单词数: ${words.length}`, 'info');
+        log(`📝 修改数量: ${modifiedCount}`, 'info');
+        btn.textContent = '迁移完成 ✓';
+        backBtn.style.display = 'block';
+      } catch (error) {
+        log(`❌ 迁移失败: ${error.message}`, 'error');
+        btn.disabled = false;
+        btn.textContent = '重试';
+      }
+    }
+  </script>
+</body>
+</html>

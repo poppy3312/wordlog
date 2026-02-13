@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordLog → Google Sheets 一键同步</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 500px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .data-preview {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .data-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .data-item:last-child {
+            border-bottom: none;
+        }
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #3367d6;
+            transform: translateY(-2px);
+        }
+        button.secondary {
+            background: #34a853;
+        }
+        button.secondary:hover {
+            background: #2d9247;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4285f4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success {
+            display: none;
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .success.active {
+            display: block;
+        }
+        .error {
+            display: none;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .error.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 WordLog 同步工具</h1>
+        <p class="subtitle">将单词数据同步到 Google Sheets</p>
+
+        <div class="data-preview">
+            <strong>当前数据：</strong>
+            <div id="dataPreview">加载中...</div>
+        </div>
+
+        <button onclick="syncToSheets()">🚀 一键同步到 Google Sheets</button>
+        <button onclick="exportCSV()" class="secondary">📄 导出 CSV 文件</button>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在同步数据...</p>
+        </div>
+
+        <div class="success" id="success">
+            ✅ 数据已复制！请打开 Google Sheets 粘贴（Ctrl+V / Cmd+V）
+        </div>
+
+        <div class="error" id="error"></div>
+    </div>
+
+    <script>
+        // 从 localStorage 读取数据
+        function loadData() {
+            const wordsData = localStorage.getItem('words');
+            if (!wordsData) {
+                return [];
+            }
+            return JSON.parse(wordsData);
+        }
+
+        // 显示数据预览
+        function showDataPreview() {
+            const words = loadData();
+            const preview = document.getElementById('dataPreview');
+
+            if (words.length === 0) {
+                preview.innerHTML = '<p style="color: #f44336;">❌ 没有找到数据</p>';
+                return;
+            }
+
+            const totalDefs = words.reduce((sum, w) => sum + (w.definitions?.length || 0), 0);
+            preview.innerHTML = `
+                <div class="data-item">📝 单词数：<strong>${words.length}</strong></div>
+                <div class="data-item">📖 释义数：<strong>${totalDefs}</strong></div>
+                <div class="data-item">🆔 唯一单词：<strong>${new Set(words.map(w => w.wordLower)).size}</strong></div>
+            `;
+        }
+
+        // 同步到 Google Sheets
+        function syncToSheets() {
+            const words = loadData();
+
+            if (words.length === 0) {
+                showError('❌ 没有数据可以同步！请先在 WordLog 中添加单词。');
+                return;
+            }
+
+            // 生成表格格式数据（TSV）
+            let tsv = '单词\t音标\t词性\t释义\t例句\t例句翻译\t掌握程度\t添加时间\t来源\n';
+
+            words.forEach(word => {
+                const definitions = word.definitions || [];
+
+                if (definitions.length > 0) {
+                    definitions.forEach(def => {
+                        tsv += [
+                            word.word,
+                            word.pronunciation || '',
+                            def.partOfSpeech || '',
+                            def.definition || '',
+                            def.example || '',
+                            def.exampleTranslation || '',
+                            word.masteryLevel || '',
+                            new Date(word.createdAt).toLocaleString('zh-CN'),
+                            word.source || ''
+                        ].join('\t') + '\n';
+                    });
+                } else {
+                    tsv += [
+                        word.word,
+                        word.pronunciation || '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        word.masteryLevel || '',
+                        new Date(word.createdAt).toLocaleString('zh-CN'),
+                        word.source || ''
+                    ].join('\t') + '\n';
+                }
+            });
+
+            // 复制到剪贴板
+            navigator.clipboard.writeText(tsv).then(() => {
+                showSuccess();
+                
+                // 同时打开 Google Sheets
+                setTimeout(() => {
+                    window.open('https://docs.google.com/spreadsheets/d/1wKe_Nk45L7XrPmv9SGwtYB7PzILFINxhQTtWjTRfWDE/edit?usp=sharing', '_blank');
+                }, 1000);
+            }).catch(err => {
+                showError('复制失败：' + err.message);
+            });
+        }
+
+        // 导出 CSV
+        function exportCSV() {
+            const words = loadData();
+
+            if (words.length === 0) {
+                showError('❌ 没有数据可以导出！');
+                return;
+            }
+
+            let csv = '单词,音标,词性,释义,例句,例句翻译,掌握程度,添加时间,来源\n';
+
+            words.forEach(word => {
+                const definitions = word.definitions || [];
+
+                if (definitions.length > 0) {
+                    definitions.forEach(def => {
+                        csv += [
+                            `"${word.word}"`,
+                            `"${(word.pronunciation || '').replace(/"/g, '""')}"`,
+                            `"${(def.partOfSpeech || '').replace(/"/g, '""')}"`,
+                            `"${(def.definition || '').replace(/"/g, '""')}"`,
+                            `"${(def.example || '').replace(/"/g, '""')}"`,
+                            `"${(def.exampleTranslation || '').replace(/"/g, '""')}"`,
+                            `"${(word.masteryLevel || '').replace(/"/g, '""')}"`,
+                            `"${new Date(word.createdAt).toLocaleString('zh-CN')}"`,
+                            `"${(word.source || '').replace(/"/g, '""')}"`
+                        ].join(',') + '\n';
+                    });
+                } else {
+                    csv += [
+                        `"${word.word}"`,
+                        `"${(word.pronunciation || '').replace(/"/g, '""')}"`,
+                        '""',
+                        '""',
+                        '""',
+                        '""',
+                        `"${(word.masteryLevel || '').replace(/"/g, '""')}"`,
+                        `"${new Date(word.createdAt).toLocaleString('zh-CN')}"`,
+                        `"${(word.source || '').replace(/"/g, '""')}"`
+                    ].join(',') + '\n';
+                }
+            });
+
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'wordlog-words-' + new Date().toISOString().slice(0, 10) + '.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function showSuccess() {
+            document.getElementById('loading').classList.remove('active');
+            document.getElementById('success').classList.add('active');
+            document.getElementById('error').classList.remove('active');
+
+            setTimeout(() => {
+                document.getElementById('success').classList.remove('active');
+            }, 5000);
+        }
+
+        function showError(message) {
+            document.getElementById('loading').classList.remove('active');
+            document.getElementById('error').textContent = message;
+            document.getElementById('error').classList.add('active');
+            document.getElementById('success').classList.remove('active');
+        }
+
+        // 页面加载时显示数据
+        showDataPreview();
+    </script>
+</body>
+</html>

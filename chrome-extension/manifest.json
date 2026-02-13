@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "WordLog - 单词本工具",
+  "version": "1.7.0",
+  "description": "简洁优雅的单词收藏工具，支持一键添加、自动查询释义",
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "activeTab",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://api.dictionaryapi.dev/*",
+    "https://open.bigmodel.cn/*",
+    "https://api.minimax.chat/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "commands": {
+    "add-word": {
+      "suggested_key": {
+        "default": "Ctrl+E",
+        "mac": "Command+E"
+      },
+      "description": "添加选中的单词到单词本"
+    }
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

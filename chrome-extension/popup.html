@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WordLog - 单词本工具</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Popup 特有样式 */
+    body {
+      width: 360px;
+      min-height: 400px;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--wordlog-bg-body);
+      color: var(--wordlog-text-primary);
+    }
+
+    .popup-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* 简化头部 */
+    .popup-header {
+      padding: 16px 20px;
+      background: var(--wordlog-bg-card);
+      border-bottom: 1px solid var(--wordlog-border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .popup-header .logo {
+      font-size: 28px;
+    }
+
+    .popup-header h1 {
+      margin: 0;
+      font-size: 18px;
+      color: var(--wordlog-primary);
+      font-weight: 600;
+    }
+
+    .popup-header .count {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--wordlog-text-secondary);
+      background: var(--wordlog-primary-light);
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+
+    /* 单词列表区域 */
+    .popup-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      max-height: 320px;
+    }
+
+    .popup-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--wordlog-text-secondary);
+    }
+
+    .popup-empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .popup-empty p {
+      font-size: 14px;
+      margin: 4px 0;
+    }
+
+    /* 单词卡片 */
+    .word-list-item {
+      background: var(--wordlog-bg-card);
+      border: 1px solid var(--wordlog-border);
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .word-list-item:hover {
+      border-color: var(--wordlog-primary);
+      box-shadow: var(--wordlog-shadow-md);
+    }
+
+    /* 单词内容布局 */
+    .word-list-content {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .word-list-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .word-list-word {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--wordlog-primary);
+    }
+
+    /* SVG图片 - 放在单词旁边 */
+    .word-list-svg {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      object-fit: contain;
+    }
+
+    .word-list-date {
+      font-size: 11px;
+      color: var(--wordlog-text-secondary);
+      margin-left: auto;
+    }
+
+    .word-list-word {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--wordlog-primary);
+    }
+
+    .word-list-date {
+      font-size: 11px;
+      color: var(--wordlog-text-secondary);
+    }
+
+    .word-list-definition {
+      font-size: 13px;
+      color: var(--wordlog-text-primary);
+      line-height: 1.5;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .word-list-definition span:not(.word-list-pos) {
+      color: #374151;
+    }
+
+    .word-list-definition span:not(.word-list-pos) {
+      color: #374151;
+    }
+
+    .word-list-pos {
+      flex-shrink: 0;
+      padding: 3px 6px;
+      background: #E5E7EB;
+      color: #6B7280;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* 底部输入区域 */
+    .popup-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--wordlog-border);
+      background: var(--wordlog-bg-card);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .word-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1.5px solid var(--wordlog-border);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      background: var(--wordlog-bg-body);
+      color: var(--wordlog-text-primary);
+      transition: all 0.2s;
+    }
+
+    .word-input:focus {
+      outline: none;
+      border-color: var(--wordlog-primary);
+      box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.15);
+    }
+
+    .word-input::placeholder {
+      color: var(--wordlog-text-secondary);
+    }
+
+    .add-btn {
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 8px;
+      background: var(--wordlog-primary);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .add-btn:hover {
+      background: var(--wordlog-primary-hover);
+      transform: scale(1.05);
+    }
+
+    .add-btn:active {
+      transform: scale(0.95);
+    }
+
+    .add-btn:disabled {
+      background: var(--wordlog-border);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .add-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .full-version-btn {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--wordlog-border);
+      border-radius: 8px;
+      background: var(--wordlog-bg-body);
+      color: var(--wordlog-text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .full-version-btn:hover {
+      background: var(--wordlog-primary-light);
+      border-color: var(--wordlog-primary);
+      color: var(--wordlog-primary);
+    }
+
+    .full-version-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* 加载动画 */
+    .loading-spinner {
+      text-align: center;
+      padding: 40px;
+      color: var(--wordlog-text-secondary);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      border: 3px solid var(--wordlog-border);
+      border-top-color: var(--wordlog-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Toast 提示 */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-10px);
+    }
+
+    .toast-success {
+      background: var(--wordlog-success);
+      color: white;
+    }
+
+    .toast-error {
+      background: var(--wordlog-error);
+      color: white;
+    }
+
+    /* 滚动条样式 */
+    .popup-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .popup-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .popup-content::-webkit-scrollbar-thumb {
+      background: var(--wordlog-border);
+      border-radius: 3px;
+    }
+
+    .popup-content::-webkit-scrollbar-thumb:hover {
+      background: var(--wordlog-text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <div class="popup-container">
+    <!-- 头部 -->
+    <div class="popup-header">
+      <span class="logo">📚</span>
+      <h1>WordLog</h1>
+      <span class="count" id="wordCount">0 个单词</span>
+    </div>
+
+    <!-- 单词列表 -->
+    <div class="popup-content" id="content">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <!-- 底部输入区 -->
+    <div class="popup-footer">
+      <div class="input-row">
+        <input type="text" class="word-input" id="wordInput" placeholder="输入要添加的单词..." autocomplete="off">
+        <button class="add-btn" id="addBtn" title="添加单词">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+      </div>
+      <button class="full-version-btn" id="openWebApp">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+        打开完整版
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="wordForms.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

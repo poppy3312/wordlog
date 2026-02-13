@@ -1,0 +1,332 @@
+/* WordLog Chrome Extension - Styles */
+/* 基于 Claude 设计规范 */
+
+/* ========== CSS 变量系统 ========== */
+:root {
+  /* 主色调 - Claude 温暖橙色 */
+  --wordlog-primary: #D97757;
+  --wordlog-primary-hover: #C96747;
+  --wordlog-primary-active: #B95737;
+  --wordlog-primary-light: #FEF3E7;
+
+  /* 中性色 - 浅色模式 */
+  --wordlog-bg-body: #FAFAFA;
+  --wordlog-bg-card: #FFFFFF;
+  --wordlog-text-primary: #2D3436;
+  --wordlog-text-secondary: #636E72;
+  --wordlog-border: #E0E0E0;
+
+  /* 功能色 */
+  --wordlog-success: #27AE60;
+  --wordlog-success-bg: #E7F5E9;
+  --wordlog-error: #E74C3C;
+  --wordlog-error-bg: #FDEDEC;
+  --wordlog-warning: #F39C12;
+  --wordlog-warning-bg: #FFF3E7;
+  --wordlog-info: #3498DB;
+  --wordlog-info-bg: #E7F3FF;
+
+  /* 间距 */
+  --wordlog-spacing-sm: 8px;
+  --wordlog-spacing-md: 16px;
+  --wordlog-spacing-lg: 24px;
+
+  /* 圆角 */
+  --wordlog-radius-sm: 6px;
+  --wordlog-radius-md: 8px;
+  --wordlog-radius-lg: 12px;
+
+  /* 阴影 */
+  --wordlog-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --wordlog-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --wordlog-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* 字体 */
+  --wordlog-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --wordlog-font-size-base: 14px;
+  --wordlog-font-size-word: 18px;
+  --wordlog-font-weight-semibold: 600;
+}
+
+/* ========== Toast 提示 ========== */
+
+.wordlog-toast {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  display: flex;
+  align-items: center;
+  gap: var(--wordlog-spacing-sm);
+  padding: 12px var(--wordlog-spacing-md);
+  border-radius: var(--wordlog-radius-lg);
+  font-family: var(--wordlog-font-family);
+  font-size: var(--wordlog-font-size-base);
+  box-shadow: var(--wordlog-shadow-lg);
+  z-index: 2147483647;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.wordlog-toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.wordlog-toast-hide {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+/* Toast 状态样式 */
+.wordlog-toast-success {
+  background: var(--wordlog-success-bg);
+  color: var(--wordlog-success);
+  border: 1px solid var(--wordlog-success);
+}
+
+.wordlog-toast-error {
+  background: var(--wordlog-error-bg);
+  color: var(--wordlog-error);
+  border: 1px solid var(--wordlog-error);
+}
+
+.wordlog-toast-info {
+  background: var(--wordlog-info-bg);
+  color: var(--wordlog-info);
+  border: 1px solid var(--wordlog-info);
+}
+
+.wordlog-toast-warning {
+  background: var(--wordlog-warning-bg);
+  color: var(--wordlog-warning);
+  border: 1px solid var(--wordlog-warning);
+}
+
+.wordlog-toast-icon {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.wordlog-toast-message {
+  font-weight: 500;
+}
+
+/* ========== 悬浮卡片 ========== */
+
+.wordlog-float-card {
+  position: absolute;
+  width: 320px;
+  max-width: 90vw;
+  background: var(--wordlog-bg-card);
+  border-radius: var(--wordlog-radius-lg);
+  box-shadow: var(--wordlog-shadow-lg);
+  border: 1px solid var(--wordlog-border);
+  font-family: var(--wordlog-font-family);
+  z-index: 2147483647;
+  overflow: hidden;
+}
+
+.wordlog-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--wordlog-spacing-md);
+  background: var(--wordlog-primary-light);
+  border-bottom: 1px solid var(--wordlog-border);
+}
+
+.wordlog-card-word {
+  font-size: var(--wordlog-font-size-word);
+  font-weight: var(--wordlog-font-weight-semibold);
+  color: var(--wordlog-primary);
+}
+
+.wordlog-card-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--wordlog-text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--wordlog-radius-sm);
+  transition: all 0.2s;
+}
+
+.wordlog-card-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--wordlog-text-primary);
+}
+
+.wordlog-card-content {
+  padding: var(--wordlog-spacing-md);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.wordlog-card-loading {
+  text-align: center;
+  padding: var(--wordlog-spacing-lg);
+  color: var(--wordlog-text-secondary);
+}
+
+.wordlog-card-error {
+  text-align: center;
+  padding: var(--wordlog-spacing-md);
+  color: var(--wordlog-error);
+}
+
+.wordlog-card-definition {
+  display: flex;
+  gap: var(--wordlog-spacing-sm);
+  margin-bottom: var(--wordlog-spacing-md);
+}
+
+.wordlog-card-pos {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  background: var(--wordlog-primary-light);
+  color: var(--wordlog-primary);
+  border-radius: var(--wordlog-radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.wordlog-card-def {
+  color: var(--wordlog-text-primary);
+  line-height: 1.6;
+}
+
+.wordlog-card-example {
+  margin-left: 0;
+  margin-bottom: var(--wordlog-spacing-md);
+  padding-left: var(--wordlog-spacing-md);
+  color: var(--wordlog-text-secondary);
+  font-size: 13px;
+  font-style: italic;
+  border-left: 2px solid var(--wordlog-primary);
+}
+
+.wordlog-card-footer {
+  padding: var(--wordlog-spacing-md);
+  border-top: 1px solid var(--wordlog-border);
+  display: flex;
+  justify-content: center;
+}
+
+.wordlog-card-add {
+  width: 100%;
+  padding: 10px var(--wordlog-spacing-md);
+  background: var(--wordlog-primary);
+  color: white;
+  border: none;
+  border-radius: var(--wordlog-radius-md);
+  font-family: var(--wordlog-font-family);
+  font-size: var(--wordlog-font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.wordlog-card-add:hover {
+  background: var(--wordlog-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--wordlog-shadow-md);
+}
+
+.wordlog-card-add:active {
+  background: var(--wordlog-primary-active);
+  transform: translateY(0);
+}
+
+/* ========== 暗色模式适配 ========== */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wordlog-primary: #E8987A;
+    --wordlog-primary-hover: #F0A890;
+    --wordlog-primary-active: #D8886A;
+    --wordlog-primary-light: rgba(232, 152, 122, 0.15);
+
+    --wordlog-bg-body: #1A1A1A;
+    --wordlog-bg-card: #242424;
+    --wordlog-text-primary: #EAEAEA;
+    --wordlog-text-secondary: #A0A0A0;
+    --wordlog-border: #333333;
+
+    --wordlog-success-bg: rgba(39, 174, 96, 0.15);
+    --wordlog-error-bg: rgba(231, 76, 60, 0.15);
+    --wordlog-warning-bg: rgba(243, 156, 18, 0.15);
+    --wordlog-info-bg: rgba(52, 152, 219, 0.15);
+  }
+
+  .wordlog-float-card {
+    background: var(--wordlog-bg-card);
+    border-color: var(--wordlog-border);
+  }
+
+  .wordlog-card-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ========== 动画效果 ========== */
+
+@keyframes wordlog-slide-up {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes wordlog-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ========== 响应式设计 ========== */
+
+@media (max-width: 480px) {
+  .wordlog-float-card {
+    width: 280px;
+  }
+
+  .wordlog-toast {
+    max-width: calc(100vw - 32px);
+    font-size: 13px;
+  }
+}
+
+/* ========== 可访问性 ========== */
+
+.wordlog-toast:focus-within,
+.wordlog-float-card:focus-within {
+  outline: 2px solid var(--wordlog-primary);
+  outline-offset: 2px;
+}
+
+.wordlog-card-add:focus,
+.wordlog-card-close:focus {
+  outline: 2px solid var(--wordlog-primary);
+  outline-offset: 2px;
+}
+
+/* 减少动画（尊重用户偏好） */
+@media (prefers-reduced-motion: reduce) {
+  .wordlog-toast,
+  .wordlog-float-card,
+  .wordlog-card-add,
+  .wordlog-card-close {
+    transition: none;
+  }
+}

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordLog - 实时调试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #D97757; margin-bottom: 20px; }
+        .word-card {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .word-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #D97757;
+            margin-bottom: 15px;
+        }
+        .data-row {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+        }
+        .data-label {
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .data-value {
+            color: #333;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .problem {
+            background: #ffebee;
+            border-left: 4px solid #c62828;
+        }
+        button {
+            background: #D97757;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover { background: #c06649; }
+        button.secondary { background: #666; }
+        button.secondary:hover { background: #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 WordLog 实时数据调试</h1>
+
+        <button onclick="loadData()">刷新数据</button>
+        <button onclick="fixAll()" style="background:#4caf50">修复所有问题（直接执行）</button>
+        <button onclick="clearData()" class="secondary">清空所有数据</button>
+        <button onclick="goBack()" class="secondary">返回主页面</button>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        function loadData() {
+            const data = localStorage.getItem('wordlog_words');
+            const output = document.getElementById('output');
+
+            if (!data) {
+                output.innerHTML = '<p style="color:#c62828;">❌ 没有找到单词数据</p>';
+                return;
+            }
+
+            const words = JSON.parse(data);
+            let html = `<h3>共有 ${words.length} 个单词</h3>`;
+
+            words.forEach((word, index) => {
+                html += `<div class="word-card">`;
+                html += `<div class="word-title">${index + 1}. ${word.word}</div>`;
+
+                // 基本信息
+                html += `<div class="data-row">`;
+                html += `<div class="data-label">wordLower:</div>`;
+                html += `<div class="data-value">${word.wordLower || '❌ 缺失'}</div>`;
+                html += `</div>`;
+
+                html += `<div class="data-row">`;
+                html += `<div class="data-label">pronunciation:</div>`;
+                html += `<div class="data-value">${word.pronunciation || '❌ 缺失'}</div>`;
+                html += `</div>`;
+
+                // 检查 definitions
+                html += `<div class="data-row">`;
+                html += `<div class="data-label">definitions 类型:</div>`;
+                html += `<div class="data-value">${Array.isArray(word.definitions) ? '✅ Array(' + word.definitions.length + ')' : '❌ ' + typeof word.definitions}</div>`;
+                html += `</div>`;
+
+                if (word.definitions && Array.isArray(word.definitions) && word.definitions.length > 0) {
+                    word.definitions.forEach((def, i) => {
+                        html += `<div class="data-row ${typeof def !== 'object' ? 'problem' : ''}">`;
+                        html += `<div class="data-label">释义 ${i + 1}:</div>`;
+                        html += `<div class="data-value">`;
+                        html += `类型: ${typeof def}<br>`;
+                        html += `partOfSpeech: ${def.partOfSpeech || '❌'}<br>`;
+                        html += `definition 类型: ${typeof def.definition}<br>`;
+                        html += `definition: ${def.definition ? (def.definition.substring(0, 100) + '...') : '❌空'}<br>`;
+                        html += `example: ${def.example ? '✅' : '❌'}`;
+                        html += `</div>`;
+                        html += `</div>`;
+                    });
+                } else {
+                    html += `<div class="data-row problem">`;
+                    html += `<div class="data-label">⚠️ definitions 问题:</div>`;
+                    html += `<div class="data-value">${JSON.stringify(word.definitions).substring(0, 200)}</div>`;
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+            });
+
+            output.innerHTML = html;
+        }
+
+        function fixAll() {
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                document.getElementById('output').innerHTML = '<p style="color:#c62828;">❌ 没有找到单词数据</p>';
+                return;
+            }
+
+            let words = JSON.parse(data);
+            let fixedCount = 0;
+            const output = document.getElementById('output');
+
+            output.innerHTML = '<p style="color:#D97757;">🔄 正在修复数据，请稍候...</p>';
+
+            words = words.map(word => {
+                let needsFix = false;
+
+                // 确保 wordLower
+                if (!word.wordLower) {
+                    word.wordLower = word.word.toLowerCase();
+                    needsFix = true;
+                }
+
+                // 确保 definitions 是有效数组
+                if (!word.definitions || !Array.isArray(word.definitions) || word.definitions.length === 0) {
+                    word.definitions = [{
+                        partOfSpeech: '名词',
+                        definition: '暂无释义',
+                        example: '',
+                        exampleTranslation: ''
+                    }];
+                    needsFix = true;
+                } else {
+                    // 检查每个 definition
+                    word.definitions = word.definitions.map(def => {
+                        if (typeof def !== 'object' || def === null) {
+                            needsFix = true;
+                            return {
+                                partOfSpeech: '名词',
+                                definition: '暂无释义',
+                                example: '',
+                                exampleTranslation: ''
+                            };
+                        }
+
+                        // 确保有必要字段
+                        if (!def.definition) {
+                            def.definition = '暂无释义';
+                            needsFix = true;
+                        }
+
+                        if (!def.partOfSpeech) {
+                            def.partOfSpeech = '名词';
+                            needsFix = true;
+                        }
+
+                        if (!def.example) {
+                            def.example = '';
+                            needsFix = true;
+                        }
+
+                        return def;
+                    });
+                }
+
+                if (needsFix) {
+                    fixedCount++;
+                }
+
+                return word;
+            });
+
+            localStorage.setItem('wordlog_words', JSON.stringify(words));
+
+            // 重新加载数据显示
+            setTimeout(() => {
+                loadData();
+                output.innerHTML = '<p style="color:#4caf50;padding:15px;background:#e8f5e9;border-radius:8px;">✅ 已修复 ' + fixedCount + ' 个单词的数据格式！</p>';
+            }, 100);
+        }
+
+        function clearData() {
+            localStorage.removeItem('wordlog_words');
+            localStorage.removeItem('wordlog_stats');
+            document.getElementById('output').innerHTML = '<p style="color:#4caf50;padding:15px;background:#e8f5e9;border-radius:8px;">✅ 已清空所有数据</p>';
+            setTimeout(() => {
+                loadData();
+            }, 500);
+        }
+
+        function goBack() {
+            window.location.href = 'http://localhost:3001';
+        }
+
+        // 自动加载数据
+        window.onload = function() {
+            loadData();
+            // 每5秒自动刷新一次
+            setInterval(loadData, 5000);
+        };
+    </script>
+</body>
+</html>

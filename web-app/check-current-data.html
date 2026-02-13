@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WordLog 数据查看器</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        h1 { color: #333; }
+        .section { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        button { background: #007AFF; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0051D5; }
+        .data-preview { background: white; padding: 10px; border-radius: 4px; margin-top: 10px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .storage-key { color: #666; margin: 5px 0; }
+        .backup-btn { background: #34C759; }
+    </style>
+</head>
+<body>
+    <h1>🔍 WordLog 数据查看器</h1>
+    
+    <div class="section">
+        <h2>📍 当前位置信息</h2>
+        <p><strong>域名:</strong> <span id="domain"></span></p>
+        <p><strong>用户代理:</strong> <span id="userAgent"></span></p>
+    </div>
+
+    <div class="section">
+        <h2>📦 LocalStorage 数据</h2>
+        <button onclick="checkLocalStorage()">检查 LocalStorage</button>
+        <button onclick="backupLocalStorage()" class="backup-btn">💾 备份所有数据</button>
+        <div id="localStorageResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>🗂️ IndexedDB 数据</h2>
+        <button onclick="checkIndexedDB()">检查 IndexedDB</button>
+        <div id="indexedDbResult"></div>
+    </div>
+
+    <script>
+        document.getElementById('domain').textContent = window.location.href;
+        document.getElementById('userAgent').textContent = navigator.userAgent.substring(0, 100) + '...';
+
+        function checkLocalStorage() {
+            const result = document.getElementById('localStorageResult');
+            const keys = Object.keys(localStorage);
+            
+            if (keys.length === 0) {
+                result.innerHTML = '<p>❌ LocalStorage 为空</p>';
+                return;
+            }
+
+            let html = '<p>✅ 找到 ' + keys.length + ' 个数据项：</p>';
+            keys.forEach(key => {
+                const value = localStorage.getItem(key);
+                const preview = value.length > 100 ? value.substring(0, 100) + '...' : value;
+                html += `
+                    <div class="storage-key">
+                        <strong>Key:</strong> ${key}<br>
+                        <strong>长度:</strong> ${value.length} 字符<br>
+                        <strong>预览:</strong> <pre>${preview}</pre>
+                    </div>
+                `;
+            });
+            result.innerHTML = html;
+        }
+
+        function backupLocalStorage() {
+            const data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                data[key] = localStorage.getItem(key);
+            }
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'wordlog-backup-' + new Date().toISOString().slice(0,10) + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            alert('✅ 数据已备份到下载文件夹！');
+        }
+
+        async function checkIndexedDB() {
+            const result = document.getElementById('indexedDbResult');
+            const databases = await indexedDB.databases();
+            
+            if (databases.length === 0) {
+                result.innerHTML = '<p>❌ 没有 IndexedDB 数据库</p>';
+                return;
+            }
+
+            let html = '<p>✅ 找到 ' + databases.length + ' 个数据库：</p>';
+            databases.forEach(db => {
+                html += `<div class="storage-key"><strong>数据库:</strong> ${db.name}<br><strong>版本:</strong> ${db.version}</div>`;
+            });
+            result.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

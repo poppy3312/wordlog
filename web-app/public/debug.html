@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordLog 数据调试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #D97757; margin-bottom: 20px; }
+        .word-item {
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .word-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .word-detail {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0;
+        }
+        .word-detail span {
+            color: #D97757;
+            font-weight: 500;
+        }
+        button {
+            background: #D97757;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #c06649; }
+        button.secondary { background: #666; }
+        button.secondary:hover { background: #555; }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            color: #2e7d32;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 WordLog 数据调试工具</h1>
+
+        <button onclick="showAllWords()">📋 显示所有单词</button>
+        <button onclick="checkSpecificWords()" class="secondary">🔍 检查特定单词</button>
+        <button onclick="fixSprouting()" class="secondary">🔧 修复 sprouting</button>
+        <button onclick="clearAndReload()" class="secondary">🗑️ 清空所有数据</button>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        // 内置中文释义库（从 dictionaryAPI.js 复制）
+        const CHINESE_DEFINITIONS = {
+            'sprouting': {
+                pronunciation: '/ˈspraʊtɪŋ/',
+                partOfSpeech: '动词',
+                definition: '发芽；长出；萌芽',
+                example: 'The seeds are sprouting early this year.',
+                exampleTranslation: '种子今年发芽很早。'
+            },
+            'philosophising': {
+                pronunciation: '/fɪˈlɒsəfaɪzɪŋ/',
+                partOfSpeech: '动词',
+                definition: '进行哲学思考；哲学化',
+                example: 'He is philosophising about the nature of reality.',
+                exampleTranslation: '他正在思考现实的本质。'
+            },
+            'crunched': {
+                pronunciation: '/krʌntʃt/',
+                partOfSpeech: '动词',
+                definition: '压碎；嘎吱作响地咀嚼；挤压',
+                example: 'She crunched the numbers in her head.',
+                exampleTranslation: '她在脑海中盘算着这些数字。'
+            },
+            'bloating': {
+                pronunciation: '/ˈbləʊtɪŋ/',
+                partOfSpeech: '动词',
+                definition: '膨胀；肿胀；浮夸',
+                example: 'The bloated corpse floated on the river.',
+                exampleTranslation: '肿胀的尸体漂浮在河面上。'
+            },
+            'tempering': {
+                pronunciation: '/ˈtempərɪŋ/',
+                partOfSpeech: '名词/动词',
+                definition: '回火；淬炼；调节；锻炼',
+                example: 'The tempering of steel requires skill.',
+                exampleTranslation: '钢材的回火处理需要技巧。'
+            },
+            'twisting': {
+                pronunciation: '/ˈtwɪstɪŋ/',
+                partOfSpeech: '动词/名词',
+                definition: '扭曲；转动；捻',
+                example: 'She was twisting her hair nervously.',
+                exampleTranslation: '她紧张地卷着头发。'
+            },
+            'bloviating': {
+                pronunciation: '/ˈbləviˌeɪtɪŋ/',
+                partOfSpeech: '动词',
+                definition: '夸夸其谈；说大话；浮夸',
+                example: 'He kept bloviating about his achievements.',
+                exampleTranslation: '他一直夸耀自己的成就。'
+            }
+        };
+
+        function showOutput(html, isError = false) {
+            const output = document.getElementById('output');
+            output.innerHTML = `<div class="result ${isError ? 'error' : ''}">${html}</div>`;
+        }
+
+        function showAllWords() {
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                showOutput('❌ 没有找到单词数据', true);
+                return;
+            }
+
+            const words = JSON.parse(data);
+            let html = `<h3>共有 ${words.length} 个单词</h3>`;
+
+            words.forEach((w, i) => {
+                html += `
+                    <div class="word-item">
+                        <div class="word-title">${i + 1}. ${w.word}</div>
+                        <div class="word-detail">wordLower: <span>"${w.wordLower}"</span></div>
+                        <div class="word-detail">source: <span>${w.source || 'undefined'}</span></div>
+                        <div class="word-detail">pronunciation: <span>${w.pronunciation || 'undefined'}</span></div>
+                        <div class="word-detail">definitions: <span>${w.definitions ? JSON.stringify(w.definitions) : 'NO DEFINITIONS'}</span></div>
+                    </div>
+                `;
+            });
+
+            showOutput(html);
+        }
+
+        function checkSpecificWords() {
+            const targetWords = ['sprouting', 'philosophising', 'crunched', 'bloating', 'tempering', 'twisting', 'bloviating'];
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                showOutput('❌ 没有找到单词数据', true);
+                return;
+            }
+
+            const words = JSON.parse(data);
+            let html = '<h3>检查特定单词</h3>';
+
+            targetWords.forEach(target => {
+                const found = words.find(w => w.wordLower === target);
+                if (found) {
+                    const hasChinese = found.definitions && found.definitions[0] &&
+                                       !found.definitions[0].definition.includes('查询中') &&
+                                       !found.definitions[0].definition.includes('释义暂不可用');
+
+                    html += `
+                        <div class="word-item">
+                            <div class="word-title">✅ 找到: ${target}</div>
+                            <div class="word-detail">中文释义: <span>${hasChinese ? '✅ 有' : '❌ 无 - ' + JSON.stringify(found.definitions)}</span></div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="word-item">
+                            <div class="word-title">❌ 未找到: ${target}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            showOutput(html);
+        }
+
+        function fixSprouting() {
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                showOutput('❌ 没有找到单词数据', true);
+                return;
+            }
+
+            let words = JSON.parse(data);
+            let fixedCount = 0;
+            const fixedWords = [];
+
+            words = words.map(word => {
+                // 规范化：去除空格，转小写
+                const wordOriginal = word.word || '';
+                const wordLower = wordOriginal.toLowerCase().trim();
+
+                // 检查是否在内置库中
+                if (CHINESE_DEFINITIONS[wordLower]) {
+                    const builtin = CHINESE_DEFINITIONS[wordLower];
+                    fixedCount++;
+                    fixedWords.push(wordOriginal);
+
+                    return {
+                        ...word,
+                        word: wordOriginal,
+                        wordLower: wordLower,
+                        pronunciation: builtin.pronunciation,
+                        definitions: [{
+                            partOfSpeech: builtin.partOfSpeech,
+                            definition: builtin.definition,
+                            example: builtin.example,
+                            exampleTranslation: builtin.exampleTranslation
+                        }],
+                        source: 'builtin-fixed',
+                        updatedAt: Date.now()
+                    };
+                }
+
+                return word;
+            });
+
+            localStorage.setItem('wordlog_words', JSON.stringify(words));
+
+            let resultHtml = `✅ 已修复 <strong>${fixedCount}</strong> 个单词的中文释义！<br><br>`;
+            resultHtml += `修复的单词：${fixedWords.join(', ') || '无'}<br><br>`;
+            resultHtml += `<strong>请刷新主页面查看效果！</strong>`;
+            showOutput(resultHtml);
+        }
+
+        function clearAndReload() {
+            if (confirm('确定要清空所有单词数据吗？此操作不可恢复！')) {
+                localStorage.removeItem('wordlog_words');
+                localStorage.removeItem('wordlog_stats');
+                showOutput('✅ 已清空所有数据');
+                setTimeout(() => location.reload(), 1500);
+            }
+        }
+    </script>
+</body>
+</html>

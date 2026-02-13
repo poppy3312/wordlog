@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocalStorage 检查工具</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; margin-bottom: 20px; }
+    .section {
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .section h2 { font-size: 16px; color: #555; margin-bottom: 10px; }
+    .key-value {
+      display: flex;
+      padding: 10px;
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .key { color: #667eea; font-weight: bold; margin-right: 10px; }
+    .value { color: #333; overflow: hidden; text-overflow: ellipsis; }
+    .btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    .btn:hover { background: #5568d3; }
+    .empty { color: #999; padding: 20px; text-align: center; }
+    pre { background: #f0f0f0; padding: 15px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 LocalStorage 检查工具</h1>
+
+    <div class="section">
+      <h2>所有 localStorage 数据</h2>
+      <div id="allStorage"></div>
+    </div>
+
+    <div class="section">
+      <h2>WordLog 单词数据详情</h2>
+      <div id="wordlogData"></div>
+    </div>
+
+    <button class="btn" onclick="location.reload()">🔄 刷新检查</button>
+    <button class="btn" onclick="window.location.href='http://localhost:3001'">🚀 打开 WordLog</button>
+  </div>
+
+  <script>
+    // 显示所有 localStorage 数据
+    function showAllStorage() {
+      const container = document.getElementById('allStorage');
+      const keys = Object.keys(localStorage);
+
+      if (keys.length === 0) {
+        container.innerHTML = '<div class="empty">localStorage 是空的</div>';
+        return;
+      }
+
+      container.innerHTML = keys.map(key => {
+        const value = localStorage.getItem(key);
+        const displayValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
+        return `<div class="key-value"><span class="key">${key}:</span><span class="value">${displayValue}</span></div>`;
+      }).join('');
+    }
+
+    // 显示 WordLog 数据详情
+    function showWordlogData() {
+      const container = document.getElementById('wordlogData');
+      const data = localStorage.getItem('wordlog_words');
+
+      if (!data) {
+        container.innerHTML = '<div class="empty">⚠️ 没有找到 wordlog_words 数据</div>';
+        container.innerHTML += '<div class="empty">💡 请先在 WordLog (localhost:3001) 中添加一些单词</div>';
+        return;
+      }
+
+      try {
+        const words = JSON.parse(data);
+        if (words.length === 0) {
+          container.innerHTML = '<div class="empty">wordlog_words 存在但是空数组</div>';
+          return;
+        }
+
+        let html = `<p>找到 <strong>${words.length}</strong> 个单词：</p>`;
+        html += '<pre>' + JSON.stringify(words.slice(0, 5), null, 2) + '</pre>';
+
+        if (words.length > 5) {
+          html += `<p>... 还有 ${words.length - 5} 个单词</p>`;
+        }
+
+        // 显示需要转换的单词
+        const needConvert = words.filter(w => w.word !== w.word.toLowerCase());
+        if (needConvert.length > 0) {
+          html += `<p style="color: #f59e0b; margin-top: 15px;">⚠️ 有 <strong>${needConvert.length}</strong> 个单词需要转换为小写：</p>`;
+          html += '<pre>' + JSON.stringify(needConvert.slice(0, 10).map(w => ({ word: w.word, to: w.word.toLowerCase() })), null, 2) + '</pre>';
+        } else {
+          html += `<p style="color: #10b981; margin-top: 15px;">✅ 所有单词已经是小写格式</p>`;
+        }
+
+        container.innerHTML = html;
+      } catch (e) {
+        container.innerHTML = `<div class="empty" style="color: red;">数据解析失败: ${e.message}</div>`;
+      }
+    }
+
+    showAllStorage();
+    showWordlogData();
+  </script>
+</body>
+</html>

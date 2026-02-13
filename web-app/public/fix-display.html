@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>WordLog - 修复释义显示</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #D97757; margin-bottom: 20px; }
+        button {
+            background: #D97757;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #c06649; }
+        button.secondary { background: #666; }
+        button.secondary:hover { background: #555; }
+        .word-preview {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .word-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #D97757;
+            margin-bottom: 10px;
+        }
+        .definition-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border-left: 3px solid #D97757;
+        }
+        .problem {
+            background: #ffebee;
+            border-left-color: #c62828;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .summary {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 修复释义显示问题</h1>
+
+        <button onclick="analyzeData()">分析数据</button>
+        <button onclick="fixAll()" style="background:#4caf50">修复所有问题</button>
+        <button onclick="goBack()" class="secondary">返回主页面</button>
+
+        <div id="summary" class="summary" style="display:none;"></div>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const API_KEY = 'cb984be4ea064e20b4dad8df5cb16a37.luDyhsqqMMSITW5F';
+        const API_ENDPOINT = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+
+        function analyzeData() {
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                alert('没有找到单词数据');
+                return;
+            }
+
+            const words = JSON.parse(data);
+            let html = '<h3>数据分析结果</h3>';
+            let problemCount = 0;
+            let problemWords = [];
+
+            words.forEach((word, index) => {
+                let hasProblem = false;
+                let wordHtml = `<div class="word-preview">`;
+                wordHtml += `<div class="word-title">${index + 1}. ${word.word}</div>`;
+
+                // 检查 definitions 结构
+                if (!word.definitions) {
+                    wordHtml += `<div class="definition-item problem">❌ definitions 不存在</div>`;
+                    hasProblem = true;
+                } else if (!Array.isArray(word.definitions)) {
+                    wordHtml += `<div class="definition-item problem">❌ definitions 不是数组，类型: ${typeof word.definitions}</div>`;
+                    hasProblem = true;
+                } else if (word.definitions.length === 0) {
+                    wordHtml += `<div class="definition-item problem">❌ definitions 是空数组</div>`;
+                    hasProblem = true;
+                } else {
+                    word.definitions.forEach((def, i) => {
+                        let defHtml = `<div class="definition-item">`;
+                        defHtml += `<strong>释义 ${i + 1}:</strong><br>`;
+
+                        // 检查 def 是否是对象
+                        if (typeof def !== 'object' || def === null) {
+                            defHtml += `❌ 不是对象: ${typeof def}<br>`;
+                            defHtml += `<pre>${JSON.stringify(def)}</pre>`;
+                            hasProblem = true;
+                        } else {
+                            // 检查各个字段
+                            defHtml += `partOfSpeech: ${def.partOfSpeech || '❌ 缺失'}<br>`;
+                            defHtml += `definition: ${def.definition ? (def.definition.substring(0, 100) + '...') : '❌ 缺失'}<br>`;
+                            defHtml += `example: ${def.example ? '✅ 有' : '❌ 缺失'}<br>`;
+                            defHtml += `exampleTranslation: ${def.exampleTranslation ? '✅ 有' : '❌ 缺失'}`;
+                        }
+
+                        defHtml += `</div>`;
+                        wordHtml += defHtml;
+                    });
+                }
+
+                wordHtml += `</div>`;
+                html += wordHtml;
+
+                if (hasProblem) {
+                    problemCount++;
+                    problemWords.push(word.word);
+                }
+            });
+
+            const summary = document.getElementById('summary');
+            summary.innerHTML = `
+                <strong>📊 分析摘要：</strong><br>
+                总单词数: ${words.length}<br>
+                有问题的单词: ${problemCount}<br>
+                ${problemWords.length > 0 ? '问题单词: ' + problemWords.join(', ') : ''}
+            `;
+            summary.style.display = 'block';
+
+            document.getElementById('output').innerHTML = html;
+        }
+
+        async function fixAll() {
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                alert('没有找到单词数据');
+                return;
+            }
+
+            let words = JSON.parse(data);
+            let fixedCount = 0;
+
+            // 先显示加载状态
+            document.getElementById('output').innerHTML = '<p>🔄 正在修复数据，请稍候...</p>';
+
+            for (let i = 0; i < words.length; i++) {
+                const word = words[i];
+                let needsFix = false;
+
+                // 检查 definitions 是否有效
+                if (!word.definitions || !Array.isArray(word.definitions) || word.definitions.length === 0) {
+                    needsFix = true;
+                } else {
+                    // 检查每个 definition 是否是有效对象
+                    for (const def of word.definitions) {
+                        if (typeof def !== 'object' || def === null || !def.definition) {
+                            needsFix = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (needsFix) {
+                    // 使用 GLM 重新生成释义
+                    try {
+                        document.getElementById('output').innerHTML =
+                            `<p>🔄 正在修复第 ${i + 1}/${words.length} 个单词: ${word.word}...</p>`;
+
+                        const newDefinitions = await translateWord(word.word);
+
+                        words[i] = {
+                            ...word,
+                            definitions: newDefinitions,
+                            source: 'glm-fixed',
+                            wordLower: word.word.toLowerCase(),
+                            pronunciation: newDefinitions[0]?.pronunciation || word.pronunciation || '',
+                            updatedAt: Date.now()
+                        };
+                        fixedCount++;
+                    } catch (error) {
+                        console.error('修复失败:', word.word, error);
+                        // 使用默认值
+                        words[i] = {
+                            ...word,
+                            definitions: [{
+                                partOfSpeech: '未知',
+                                definition: '释义暂不可用',
+                                example: '',
+                                exampleTranslation: ''
+                            }],
+                            wordLower: word.word.toLowerCase(),
+                            source: 'default-fixed'
+                        };
+                    }
+                }
+
+                // 延迟避免API限流
+                if (needsFix) {
+                    await sleep(500);
+                }
+            }
+
+            // 保存修复后的数据
+            localStorage.setItem('wordlog_words', JSON.stringify(words));
+
+            document.getElementById('output').innerHTML = `
+                <div style="background:#e8f5e9;padding:20px;border-radius:8px;color:#2e7d32;">
+                    <strong>✅ 修复完成！</strong><br><br>
+                    共修复了 ${fixedCount} 个单词<br><br>
+                    <a href="http://localhost:3001" style="color:#D97757;font-weight:bold;font-size:18px;">返回主页面查看效果</a>
+                </div>
+            `;
+        }
+
+        async function translateWord(word) {
+            const systemPrompt = `You are a professional translator and an EdTech Product Manager.
+
+Translate content into fluent Chinese. For web novels (BG/Romance), ensure the tone is elegant and vivid.
+
+For professional documents, keep terms like PTE, IGCSE, A-Level in English and provide precise definitions in brackets.
+
+Avoid literal translation; focus on natural phrasing that suits a native speaker.
+
+Do not output anything other than the translated text.`;
+
+            const userPrompt = `请提供英文单词 "${word}" 的中文释义，严格按照以下JSON格式返回（只返回JSON，不要其他内容）：
+
+{
+  "pronunciation": "音标（如：/sprawt/）",
+  "definitions": [
+    {
+      "partOfSpeech": "词性（如：名词、动词、形容词等）",
+      "definition": "简洁准确的中文释义，多个义项用分号；分隔",
+      "example": "简单的英文例句",
+      "exampleTranslation": "例句的中文翻译"
+    }
+  ]
+}`;
+
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'glm-4',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
+                    ]
+                })
+                    model: 'glm-4',
+                    messages: [{
+                        role: 'user',
+                        content: prompt
+                    }],
+                    temperature: 0.3,
+                    max_tokens: 500
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`API调用失败: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const content = result.choices[0].message.content;
+
+            // 解析 JSON
+            try {
+                const parsed = JSON.parse(content);
+
+                // 确保返回正确的结构
+                if (parsed.definitions && Array.isArray(parsed.definitions)) {
+                    return parsed.definitions;
+                } else {
+                    // 格式不对，尝试修复
+                    return [{
+                        partOfSpeech: parsed.partOfSpeech || '未知',
+                        definition: parsed.definition || content,
+                        example: parsed.example || '',
+                        exampleTranslation: parsed.exampleTranslation || ''
+                    }];
+                }
+            } catch (e) {
+                // JSON 解析失败，返回默认结构
+                return [{
+                    partOfSpeech: '未知',
+                    definition: content,
+                    example: '',
+                    exampleTranslation: ''
+                }];
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function goBack() {
+            window.location.href = 'http://localhost:3001';
+        }
+    </script>
+</body>
+</html>

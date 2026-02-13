@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordLog - 批量添加配图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .words-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .word-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+
+        .word-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        }
+
+        .word-card.has-image {
+            border: 2px solid #4caf50;
+        }
+
+        .word-card.processing {
+            border: 2px solid #ff9800;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .word-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .word-pos {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 8px;
+        }
+
+        .word-def {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+
+        .word-image {
+            width: 100%;
+            height: 200px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .word-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .word-image-placeholder {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        .style-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+
+        .style-REAL { background: #e3f2fd; color: #1976d2; }
+        .style-3D { background: #fce4ec; color: #c2185b; }
+        .style-INK { background: #f3e5f5; color: #7b1fa2; }
+        .style-MINI { background: #fff3e0; color: #f57c00; }
+        .style-FLAT { background: #e8f5e9; color: #388e3c; }
+        .style-RETRO { background: #ffebee; color: #d32f2f; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📸 WordLog 批量配图工具</h1>
+            <p class="subtitle">为你的单词本添加精美的配图（基于v2.0风格系统）</p>
+        </div>
+
+        <div class="controls">
+            <button id="loadBtn" class="btn btn-primary">📥 加载我的单词</button>
+            <button id="generateBtn" class="btn btn-primary" disabled>🎨 开始生成配图</button>
+            <button id="saveBtn" class="btn btn-secondary" disabled>💾 保存到Chrome Storage</button>
+            <button id="exportBtn" class="btn btn-secondary" disabled>📤 导出数据</button>
+
+            <div id="status" class="status info">点击"加载我的单词"开始</div>
+
+            <div class="progress-bar">
+                <div id="progress" class="progress-fill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div id="wordsContainer" class="words-grid"></div>
+    </div>
+
+    <script>
+        // 智谱AI API配置
+        const API_KEY = '8dac85c3e1764785b751b10f375b67de.cp2kBrj5Ua0JysG7';
+        let words = [];
+        let generatedImages = {};
+
+        // 风格推荐系统
+        function recommendStyle(word, partOfSpeech, definition) {
+            const pos = (partOfSpeech || '').toLowerCase();
+
+            // 具体名词
+            if (pos.includes('名词') || pos.includes('noun')) {
+                // 判断是否为具体可触摸的物体
+                const concreteNouns = ['keyboard', 'camera', 'apple', 'book', 'phone', 'computer', 'laptop', 'mouse', 'table', 'chair', 'cup', 'glass', 'bottle', 'pen', 'pencil', 'car', 'bicycle', 'tree', 'flower', 'bird', 'cat', 'dog', 'house', 'door', 'window'];
+                if (concreteNouns.includes(word.toLowerCase())) {
+                    return 'REAL';
+                }
+                return '3D';
+            }
+
+            // 动词
+            if (pos.includes('动词') || pos.includes('verb')) {
+                return '3D';
+            }
+
+            // 形容词
+            if (pos.includes('形容词') || pos.includes('adjective')) {
+                return 'INK';
+            }
+
+            // 抽象概念
+            const abstractConcepts = ['freedom', 'love', 'peace', 'harmony', 'success', 'balance', 'serendipity', 'innovation', 'creativity', 'wisdom'];
+            if (abstractConcepts.includes(word.toLowerCase())) {
+                return 'INK';
+            }
+
+            // 默认使用MINI风格
+            return 'MINI';
+        }
+
+        // 生成提示词
+        function generatePrompt(word, style, definition) {
+            const baseParams = ', 1:1 aspect ratio, centered, no text, no watermark, high quality';
+
+            switch(style) {
+                case 'REAL':
+                    return `Professional product photography of ${word}, ${definition || ''}, sharp focus, studio lighting, soft shadows, pure white background, 8k resolution${baseParams}`;
+
+                case '3D':
+                    return `${word}, 3D isometric style, high-quality 3D render, C4D style, Octane render, solid white background, studio lighting, soft shadows, 8k resolution${baseParams}, safe margin, no cropping`;
+
+                case 'INK':
+                    return `${word} concept, Japanese ink drawing style, sumi-e inspired, hand-drawn illustration with brush strokes, minimal elegant lines, white paper background, artistic${baseParams}`;
+
+                case 'MINI':
+                    return `${word} as a minimalist flat icon, simple geometric shapes, single accent color on white background, vector illustration style, clean lines${baseParams}`;
+
+                case 'FLAT':
+                    return `${word}, modern flat illustration style, vector art, vibrant colors, clean shapes, subtle gradients, white background${baseParams}`;
+
+                case 'RETRO':
+                    return `${word}, vintage poster art style, art deco inspired, muted retro color palette, paper texture, cream background${baseParams}`;
+
+                default:
+                    return `${word}, professional illustration, white background${baseParams}`;
+            }
+        }
+
+        // 调用智谱AI生成图片
+        async function generateImage(prompt) {
+            try {
+                const response = await fetch('https://open.bigmodel.cn/api/paas/v4/images/generations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'cogview-3-plus',
+                        prompt: prompt
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const result = await response.json();
+                return result.data?.[0]?.url || null;
+            } catch (error) {
+                console.error('生成图片失败:', error);
+                return null;
+            }
+        }
+
+        // 显示状态
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        // 更新进度
+        function updateProgress(percent) {
+            document.getElementById('progress').style.width = `${percent}%`;
+        }
+
+        // 加载单词
+        async function loadWords() {
+            showStatus('正在加载单词数据...', 'info');
+
+            try {
+                const result = await chrome.storage.local.get(['words']);
+                words = result.words || [];
+
+                if (words.length === 0) {
+                    showStatus('⚠️ 没有找到单词数据，请先在WordLog中添加一些单词', 'error');
+                    return;
+                }
+
+                displayWords();
+                showStatus(`✅ 成功加载 ${words.length} 个单词`, 'success');
+                document.getElementById('generateBtn').disabled = false;
+                document.getElementById('exportBtn').disabled = false;
+            } catch (error) {
+                showStatus(`❌ 加载失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 显示单词列表
+        function displayWords() {
+            const container = document.getElementById('wordsContainer');
+            container.innerHTML = '';
+
+            words.forEach((word, index) => {
+                const primaryDef = word.definitions?.[0] || {};
+                const style = recommendStyle(word.word, primaryDef.partOfSpeech, primaryDef.definition);
+                const hasImage = word.imageUrl && word.imageUrl.length > 0;
+
+                const card = document.createElement('div');
+                card.className = `word-card ${hasImage ? 'has-image' : ''}`;
+                card.id = `word-${index}`;
+
+                card.innerHTML = `
+                    <div class="word-title">${word.word}</div>
+                    <div class="word-pos">
+                        <span class="style-badge style-${style}">${style}</span>
+                        ${primaryDef.partOfSpeech || ''}
+                    </div>
+                    <div class="word-def">${primaryDef.definition || ''}</div>
+                    <div class="word-image">
+                        ${hasImage ? `<img src="${word.imageUrl}" alt="${word.word}">` : '<span class="word-image-placeholder">暂无配图</span>'}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // 批量生成配图
+        async function generateAllImages() {
+            const wordsNeedingImage = words.filter(w => !w.imageUrl || w.imageUrl.length === 0);
+
+            if (wordsNeedingImage.length === 0) {
+                showStatus('✅ 所有单词都已经有配图了！', 'success');
+                return;
+            }
+
+            document.getElementById('generateBtn').disabled = true;
+            showStatus(`🎨 开始生成 ${wordsNeedingImage.length} 个单词的配图...`, 'info');
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (let i = 0; i < wordsNeedingImage.length; i++) {
+                const word = wordsNeedingImage[i];
+                const index = words.findIndex(w => w.word === word.word);
+                const primaryDef = word.definitions?.[0] || {};
+                const style = recommendStyle(word.word, primaryDef.partOfSpeech, primaryDef.definition);
+
+                // 更新UI状态
+                const card = document.getElementById(`word-${index}`);
+                if (card) card.classList.add('processing');
+
+                showStatus(`🎨 正在生成 (${i + 1}/${wordsNeedingImage.length}): ${word.word} (${style}风格)`, 'info');
+                updateProgress(((i + 1) / wordsNeedingImage.length) * 100);
+
+                const prompt = generatePrompt(word.word, style, primaryDef.definition);
+                const imageUrl = await generateImage(prompt);
+
+                if (imageUrl) {
+                    words[index].imageUrl = imageUrl;
+                    generatedImages[word.word] = imageUrl;
+                    successCount++;
+
+                    // 更新卡片显示
+                    if (card) {
+                        card.classList.remove('processing');
+                        card.classList.add('has-image');
+                        const imgContainer = card.querySelector('.word-image');
+                        imgContainer.innerHTML = `<img src="${imageUrl}" alt="${word.word}">`;
+                    }
+                } else {
+                    failCount++;
+                }
+
+                // 延迟避免API限流
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            showStatus(`✅ 生成完成！成功: ${successCount}, 失败: ${failCount}`, 'success');
+            document.getElementById('saveBtn').disabled = false;
+        }
+
+        // 保存到Chrome Storage
+        async function saveToStorage() {
+            showStatus('💾 正在保存到Chrome Storage...', 'info');
+
+            try {
+                await chrome.storage.local.set({ words: words });
+                showStatus('✅ 保存成功！现在可以在WordLog中看到配图了', 'success');
+            } catch (error) {
+                showStatus(`❌ 保存失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 导出数据
+        function exportData() {
+            const dataStr = JSON.stringify(words, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wordlog-with-images-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('✅ 数据已导出', 'success');
+        }
+
+        // 事件绑定
+        document.getElementById('loadBtn').addEventListener('click', loadWords);
+        document.getElementById('generateBtn').addEventListener('click', generateAllImages);
+        document.getElementById('saveBtn').addEventListener('click', saveToStorage);
+        document.getElementById('exportBtn').addEventListener('click', exportData);
+
+        // 自动加载
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            // Chrome环境
+        } else {
+            showStatus('⚠️ 请在Chrome浏览器中打开此页面（需要Chrome Extension权限）', 'error');
+        }
+    </script>
+</body>
+</html>

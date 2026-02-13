@@ -1,0 +1,44 @@
+{
+  "name": "wordlog-webapp",
+  "version": "1.5.0",
+  "description": "WordLog - 智能单词本工具 | Chrome扩展 + React网页应用 | 自动查询释义音标例句 | 超大输入框 | 高质量语音朗读",
+  "author": "素素 & Claude",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "sync-version": "node scripts/sync-version.js",
+    "version:patch": "node scripts/bump-version.js patch",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:major": "node scripts/bump-version.js major",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "lucide-react": "^0.344.0",
+    "msedge-tts": "^2.0.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react-swc": "^4.2.3",
+    "autoprefixer": "^10.4.17",
+    "jsdom": "^28.0.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.9.3",
+    "vite": "^5.1.0",
+    "vitest": "^4.0.18"
+  }
+}

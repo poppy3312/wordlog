@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obsidian 同步 - 一键配置</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #D97757; margin-bottom: 20px; }
+        .step {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #D97757;
+            background: #fff8f5;
+        }
+        .step h3 { color: #D97757; margin-bottom: 10px; }
+        .step ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        .step li { margin: 8px 0; }
+        button {
+            background: #D97757;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin: 10px 0;
+        }
+        button:hover { background: #c06649; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .status.success { background: #e8f5e9; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+        .status.info { background: #e3f2fd; color: #1565c0; }
+        .config-preview {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ Obsidian 同步 - 一键配置</h1>
+
+        <!-- 配置预览 -->
+        <div class="step">
+            <h3>📋 将要保存的配置</h3>
+            <div class="config-preview">
+Vault 路径: ~/Documents/obsidian/sometime
+子文件夹: WordLog
+格式: flashcard (闪卡)
+自动同步: true
+API 端点: http://localhost:27124
+            </div>
+        </div>
+
+        <!-- 第一步：安装插件 -->
+        <div class="step">
+            <h3>第一步：安装 Obsidian 插件</h3>
+            <ol>
+                <li>打开 Obsidian</li>
+                <li>进入 <strong>设置</strong> → <strong>第三方插件</strong></li>
+                <li>关闭 <strong>安全模式</strong></li>
+                <li>点击 <strong>浏览</strong></li>
+                <li>搜索 <strong>Local REST API</strong></li>
+                <li>点击 <strong>安装</strong> 并 <strong>启用</strong></li>
+                <li>在插件设置中勾选 <strong>Enable REST API</strong></li>
+            </ol>
+        </div>
+
+        <!-- 第二步：测试连接 -->
+        <div class="step">
+            <h3>第二步：测试 API 连接</h3>
+            <button onclick="testConnection()">🔌 测试 Obsidian 连接</button>
+            <div id="connectionStatus"></div>
+        </div>
+
+        <!-- 第三步：保存配置 -->
+        <div class="step">
+            <h3>第三步：保存配置</h3>
+            <button onclick="saveConfiguration()">💾 保存配置到 WordLog</button>
+            <div id="configStatus"></div>
+        </div>
+
+        <!-- 完成 -->
+        <div class="step">
+            <h3>🎉 配置完成！</h3>
+            <p style="line-height: 1.8;">
+                现在你可以：<br>
+                1. 在 WordLog 中添加单词，会自动同步到 Obsidian<br>
+                2. 在 Obsidian 中查看 ~/Documents/obsidian/sometime/WordLog/ 文件夹<br>
+                3. 使用 Obsidian Flashcards 插件进行闪卡学习
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const CONFIG = {
+            vaultPath: '~/Documents/obsidian/sometime',
+            subfolder: 'WordLog',
+            format: 'flashcard',
+            autoSync: true,
+            apiEndpoint: 'http://localhost:27124'
+        };
+
+        async function testConnection() {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = 'status info';
+            statusEl.textContent = '🔄 正在检测 Obsidian API...';
+
+            try {
+                const response = await fetch(`${CONFIG.apiEndpoint}/`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (response.ok) {
+                    statusEl.className = 'status success';
+                    statusEl.innerHTML = `✅ Obsidian API 连接成功！<br><br>你可以点击"保存配置"了。`;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.innerHTML = `❌ 连接失败<br><br>请确保：<br>1. Obsidian 正在运行<br>2. Local REST API 插件已启用<br>3. API 端口设置为 ${CONFIG.apiEndpoint}`;
+            }
+        }
+
+        function saveConfiguration() {
+            const statusEl = document.getElementById('configStatus');
+
+            try {
+                // 保存到 WordLog 配置
+                localStorage.setItem('wordlog_obsidian_config', JSON.stringify(CONFIG));
+
+                // 也保存到旧版本的设置格式（兼容）
+                localStorage.setItem('wordlog_settings', JSON.stringify({
+                    obsidianPath: CONFIG.vaultPath,
+                    syncEnabled: CONFIG.autoSync,
+                    theme: 'auto'
+                }));
+
+                statusEl.className = 'status success';
+                statusEl.innerHTML = `✅ 配置已保存！<br><br>现在返回 WordLog 主页面，添加单词时会自动同步到 Obsidian。<br><br>目标路径：<br>${CONFIG.vaultPath}/${CONFIG.subfolder}/单词.md`;
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.textContent = `❌ 保存失败: ${error.message}`;
+            }
+        }
+
+        // 页面加载时自动测试连接
+        window.onload = () => {
+            setTimeout(testConnection, 500);
+        };
+    </script>
+</body>
+</html>

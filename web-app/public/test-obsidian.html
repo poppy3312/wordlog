@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obsidian API 测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #D97757; margin-bottom: 20px; }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status.connected { background: #e8f5e9; color: #2e7d32; }
+        .status.disconnected { background: #ffebee; color: #c62828; }
+        .status.checking { background: #e3f2fd; color: #1565c0; }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        button {
+            background: #D97757;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover { background: #c06649; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .result.success { background: #e8f5e9; color: #2e7d32; }
+        .result.error { background: #ffebee; color: #c62828; }
+        .result.info { background: #e3f2fd; color: #1565c0; }
+        .config {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .config-item {
+            margin: 10px 0;
+        }
+        .config-item label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 Obsidian API 测试工具</h1>
+
+        <!-- API 状态检测 -->
+        <div class="section">
+            <h3>API 连接状态</h3>
+            <p style="margin: 10px 0;">
+                状态: <span id="apiStatus" class="status checking">检测中...</span>
+            </p>
+            <button onclick="checkAPI()">重新检测</button>
+        </div>
+
+        <!-- API 配置 -->
+        <div class="section">
+            <h3>API 配置</h3>
+            <div class="config">
+                <div class="config-item">
+                    <label>API 端点</label>
+                    <input type="text" id="apiEndpoint" value="http://localhost:27124">
+                </div>
+                <button onclick="saveConfig()">保存配置</button>
+            </div>
+        </div>
+
+        <!-- 测试单词同步 -->
+        <div class="section">
+            <h3>测试单词同步</h3>
+            <div class="config-item">
+                <label>测试单词</label>
+                <input type="text" id="testWord" value="example" placeholder="输入测试单词">
+            </div>
+            <button onclick="testSync()">测试同步</button>
+            <button onclick="testCreateNote()">测试创建笔记</button>
+            <button onclick="testListNotes()">测试列出笔记</button>
+        </div>
+
+        <!-- 结果输出 -->
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const DEFAULT_API_ENDPOINT = 'http://localhost:27124';
+
+        // 加载配置
+        function loadConfig() {
+            const config = localStorage.getItem('obsidian_api_config');
+            if (config) {
+                const { apiEndpoint } = JSON.parse(config);
+                document.getElementById('apiEndpoint').value = apiEndpoint;
+            }
+        }
+
+        // 保存配置
+        function saveConfig() {
+            const apiEndpoint = document.getElementById('apiEndpoint').value;
+            localStorage.setItem('obsidian_api_config', JSON.stringify({ apiEndpoint }));
+            showOutput('success', '✅ 配置已保存');
+            checkAPI();
+        }
+
+        // 获取 API 端点
+        function getApiEndpoint() {
+            return document.getElementById('apiEndpoint').value || DEFAULT_API_ENDPOINT;
+        }
+
+        // 检测 API 连接
+        async function checkAPI() {
+            const statusEl = document.getElementById('apiStatus');
+            statusEl.className = 'status checking';
+            statusEl.textContent = '检测中...';
+
+            try {
+                const response = await fetch(`${getApiEndpoint()}/`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (response.ok) {
+                    statusEl.className = 'status connected';
+                    statusEl.textContent = '✓ 已连接';
+                    showOutput('success', '✅ Obsidian API 连接成功！');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = '✗ 未连接';
+                showOutput('error', `❌ 连接失败: ${error.message}\n\n请确保：\n1. Obsidian 正在运行\n2. Local REST API 插件已启用\n3. API 端口正确`);
+            }
+        }
+
+        // 生成笔记内容
+        function generateNoteContent(word) {
+            return `---
+tags: [wordlog/英语, 单词本/测试]
+cssclass: flashcard
+created: ${new Date().toISOString()}
+source: test
+---
+
+# ${word}
+
+## 音标
+/${word}/
+
+## 词性
+名词
+
+## 释义
+测试释义
+
+## 例句
+> This is a test example for "${word}".
+>
+> 这是一个测试例句。
+
+---
+<!--SR:!2026-02-05,1,270-->
+`;
+        }
+
+        // 测试创建笔记
+        async function testCreateNote() {
+            const word = document.getElementById('testWord').value || 'test';
+            showOutput('info', `🔄 正在创建笔记: ${word}...`);
+
+            try {
+                const content = generateNoteContent(word);
+                const notePath = `WordLog/${word}.md`;
+
+                const response = await fetch(`${getApiEndpoint()}/vault/${encodeURIComponent(notePath)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'text/markdown',
+                        'Accept': 'application/json'
+                    },
+                    body: content
+                });
+
+                if (response.ok) {
+                    showOutput('success', `✅ 笔记创建成功！\n\n路径: WordLog/${word}.md\n\n内容预览:\n${content}`);
+                } else {
+                    const error = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${error}`);
+                }
+            } catch (error) {
+                showOutput('error', `❌ 创建失败: ${error.message}`);
+            }
+        }
+
+        // 测试列出笔记
+        async function testListNotes() {
+            showOutput('info', '🔄 正在列出笔记...');
+
+            try {
+                const response = await fetch(`${getApiEndpoint()}/vault/`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showOutput('success', `✅ 获取成功！\n\n笔记列表:\n${JSON.stringify(data, null, 2)}`);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                showOutput('error', `❌ 列出失败: ${error.message}`);
+            }
+        }
+
+        // 测试完整同步流程
+        async function testSync() {
+            const word = document.getElementById('testWord').value || 'test';
+            showOutput('info', `🔄 正在测试同步: ${word}...`);
+
+            try {
+                // 1. 检查 API
+                const checkResponse = await fetch(`${getApiEndpoint()}/`);
+                if (!checkResponse.ok) {
+                    throw new Error('API 不可用');
+                }
+
+                // 2. 创建笔记
+                const content = generateNoteContent(word);
+                const notePath = `WordLog/${word}.md`;
+
+                const createResponse = await fetch(`${getApiEndpoint()}/vault/${encodeURIComponent(notePath)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'text/markdown',
+                        'Accept': 'application/json'
+                    },
+                    body: content
+                });
+
+                if (createResponse.ok) {
+                    showOutput('success', `✅ 同步测试成功！\n\n单词: ${word}\n路径: WordLog/${word}.md\n\n请在 Obsidian 中查看该笔记`);
+                } else {
+                    throw new Error(`创建笔记失败: HTTP ${createResponse.status}`);
+                }
+            } catch (error) {
+                showOutput('error', `❌ 同步失败: ${error.message}`);
+            }
+        }
+
+        // 显示输出
+        function showOutput(type, message) {
+            const output = document.getElementById('output');
+            output.innerHTML = `<div class="result ${type}">${message}</div>`;
+        }
+
+        // 初始化
+        window.onload = () => {
+            loadConfig();
+            checkAPI();
+        };
+    </script>
+</body>
+</html>

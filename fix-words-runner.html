@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WordLog 修复脚本执行器</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    button:hover {
+      transform: translateY(-2px);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    #output {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .success { color: #10b981; }
+    .error { color: #ef4444; }
+    .info { color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 WordLog 修复脚本</h1>
+    <p class="subtitle">修复现有单词的中文释义</p>
+
+    <button id="runBtn" onclick="runFix()">🚀 运行修复脚本</button>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+    const runBtn = document.getElementById('runBtn');
+
+    function log(message, type = 'info') {
+      const line = document.createElement('div');
+      line.className = type;
+      line.textContent = message;
+      output.appendChild(line);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    async function runFix() {
+      runBtn.disabled = true;
+      output.innerHTML = '';
+      log('🔧 开始修复现有单词的释义...', 'info');
+
+      try {
+        // 检查是否在Chrome扩展环境中
+        if (typeof chrome === 'undefined' || !chrome.storage) {
+          log('❌ 错误：未检测到Chrome Storage API', 'error');
+          log('请确保：', 'error');
+          log('1. 你正在使用Chrome浏览器', 'info');
+          log('2. WordLog扩展已安装并启用', 'info');
+          runBtn.disabled = false;
+          return;
+        }
+
+        // 读取当前存储的单词
+        const result = await chrome.storage.local.get(['words']);
+        let words = result.words || [];
+
+        if (words.length === 0) {
+          log('❌ 没有找到单词数据', 'error');
+          runBtn.disabled = false;
+          return;
+        }
+
+        log(`📚 找到 ${words.length} 个单词`, 'info');
+
+        // 4个单词的正确中文释义
+        const correctDefinitions = {
+          'extension': {
+            partOfSpeech: '名词',
+            definition: '扩展；延长；电话分机',
+            example: 'I installed a new browser extension.',
+            exampleTranslation: '我安装了一个新的浏览器扩展。'
+          },
+          'proceed': {
+            partOfSpeech: '动词',
+            definition: '继续进行；前进',
+            example: 'Please proceed with your presentation.',
+            exampleTranslation: '请继续你的演示。'
+          },
+          'beaming': {
+            partOfSpeech: '形容词',
+            definition: '微笑的；发光的；容光焕发',
+            example: 'She was beaming with happiness.',
+            exampleTranslation: '她开心地微笑着。'
+          },
+          'method': {
+            partOfSpeech: '名词',
+            definition: '方法；方式',
+            example: 'This is a good method to learn English.',
+            exampleTranslation: '这是一个学习英语的好方法。'
+          }
+        };
+
+        let updatedCount = 0;
+        let skippedCount = 0;
+
+        // 更新单词释义
+        for (const word of words) {
+          const wordLower = word.word.toLowerCase();
+          const correctDef = correctDefinitions[wordLower];
+
+          if (correctDef) {
+            // 检查当前释义是否是占位符
+            const currentDef = word.definitions && word.definitions[0];
+            const needsUpdate = !currentDef ||
+              currentDef.definition === '测试释义' ||
+              currentDef.definition === '释义暂不可用，可稍后手动补充' ||
+              currentDef.example === 'Test example';
+
+            if (needsUpdate) {
+              // 更新为正确的中文释义
+              word.definitions = [{
+                partOfSpeech: correctDef.partOfSpeech,
+                definition: correctDef.definition,
+                example: correctDef.example,
+                exampleTranslation: correctDef.exampleTranslation
+              }];
+
+              // 更新发音
+              if (!word.pronunciation) {
+                word.pronunciation = `/${word.word}/`;
+              }
+
+              updatedCount++;
+              log(`✅ 已更新: ${word.word}`, 'success');
+            } else {
+              skippedCount++;
+              log(`ℹ️ ${word.word} 已是正确释义，跳过`, 'info');
+            }
+          }
+        }
+
+        // 保存更新后的数据
+        if (updatedCount > 0) {
+          await chrome.storage.local.set({ words: words });
+
+          // 同时更新 localStorage (用于网页版)
+          localStorage.setItem('wordlog_words', JSON.stringify(words));
+
+          log(``, 'info');
+          log(`🎉 成功更新了 ${updatedCount} 个单词的释义！`, 'success');
+          log(`📝 请刷新 WordLog 网页 (http://localhost:3001) 查看效果`, 'info');
+
+          if (skippedCount > 0) {
+            log(`ℹ️ 跳过了 ${skippedCount} 个已是正确释义的单词`, 'info');
+          }
+        } else {
+          log('ℹ️ 没有需要更新的单词，或所有单词都已经是正确释义', 'info');
+        }
+
+        // 显示当前单词列表
+        log(``, 'info');
+        log('📋 当前单词列表:', 'info');
+        words.forEach((w, i) => {
+          const def = w.definitions && w.definitions[0];
+          log(`${i + 1}. ${w.word}`, 'info');
+          log(`   词性: ${def ? def.partOfSpeech : '无'}`, 'info');
+          log(`   释义: ${def ? def.definition : '无'}`, 'info');
+          log(`   例句: ${def ? def.example : '无'}`, 'info');
+          log(`   译文: ${def && def.exampleTranslation ? def.exampleTranslation : '无'}`, 'info');
+        });
+
+      } catch (error) {
+        log(`❌ 执行出错: ${error.message}`, 'error');
+        console.error(error);
+      }
+
+      runBtn.disabled = false;
+    }
+
+    // 页面加载时显示提示
+    log('✅ 修复脚本已就绪', 'success');
+    log('👆 点击上方按钮开始修复', 'info');
+  </script>
+</body>
+</html>

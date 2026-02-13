@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- 背景透明 -->
+
+  <!-- 书本形状轮廓 -->
+  <g>
+    <!-- 书的主体 - 竖直矩形 -->
+    <rect x="20" y="16" width="88" height="96" rx="4" fill="none" stroke="#C9A882" stroke-width="6"/>
+
+    <!-- 书脊 - 底部中央小三角形 -->
+    <path d="M58 112 L64 120 L70 112 Z" fill="#C9A882"/>
+  </g>
+
+  <!-- 字母 S - 居中，橙色 -->
+  <text x="64" y="82" font-family="Arial, sans-serif" font-size="56" font-weight="bold" fill="#D97757" text-anchor="middle">S</text>
+</svg>

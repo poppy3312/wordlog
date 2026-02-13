@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordLog - 重新生成释义</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #D97757; margin-bottom: 20px; }
+        button {
+            background: #D97757;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #c06649; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.secondary { background: #666; }
+        button.secondary:hover { background: #555; }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            display: none;
+        }
+        .result.error { background: #ffebee; color: #c62828; }
+        .progress {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #D97757;
+            transition: width 0.3s;
+        }
+        .word-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        .word-item {
+            padding: 5px 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .word-item:last-child { border-bottom: none; }
+        .info {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 WordLog 重新生成释义</h1>
+
+        <div class="info">
+            <strong>📝 说明：</strong><br>
+            1. 清空所有单词的释义和例句<br>
+            2. 使用 GLM-4.7 API 重新生成高质量中文释义<br>
+            3. 每个单词调用一次 API，请耐心等待<br>
+            <br>
+            <strong>⚠️ 注意：</strong>API调用有免费额度限制，请确认额度充足。
+        </div>
+
+        <button onclick="startRegeneration()" id="startBtn">开始重新生成</button>
+        <button onclick="showWords()" class="secondary">查看单词列表</button>
+        <button onclick="goBack()" class="secondary">返回主页面</button>
+
+        <div id="progress" class="progress">
+            <div id="progressText">准备中...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <div id="wordList" class="word-list" style="display:none;"></div>
+
+        <div id="output" class="result"></div>
+    </div>
+
+    <script>
+        const API_KEY = 'cb984be4ea064e20b4dad8df5cb16a37.luDyhsqqMMSITW5F';
+        const API_ENDPOINT = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+
+        function showOutput(html, isError = false) {
+            const output = document.getElementById('output');
+            output.innerHTML = html;
+            output.style.display = 'block';
+            if (isError) output.classList.add('error');
+        }
+
+        function showProgress(text, percent) {
+            const progress = document.getElementById('progress');
+            const progressText = document.getElementById('progressText');
+            const progressFill = document.getElementById('progressFill');
+
+            progress.style.display = 'block';
+            progressText.textContent = text;
+            progressFill.style.width = percent + '%';
+        }
+
+        function showWords() {
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                alert('没有找到单词数据');
+                return;
+            }
+
+            const words = JSON.parse(data);
+            const wordList = document.getElementById('wordList');
+
+            let html = `<strong>共有 ${words.length} 个单词</strong><br><br>`;
+            words.forEach((w, i) => {
+                html += `<div class="word-item">${i + 1}. ${w.word}</div>`;
+            });
+
+            wordList.innerHTML = html;
+            wordList.style.display = 'block';
+        }
+
+        async function startRegeneration() {
+            const data = localStorage.getItem('wordlog_words');
+            if (!data) {
+                showOutput('❌ 没有找到单词数据', true);
+                return;
+            }
+
+            const words = JSON.parse(data);
+            if (words.length === 0) {
+                showOutput('❌ 没有单词需要重新生成', true);
+                return;
+            }
+
+            if (!confirm(`确定要重新生成 ${words.length} 个单词的释义吗？\n\n这会调用 GLM-4.7 API ${words.length} 次，请确认额度充足。`)) {
+                return;
+            }
+
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+
+            try {
+                const updatedWords = [];
+
+                for (let i = 0; i < words.length; i++) {
+                    const word = words[i];
+                    const percent = Math.round(((i + 1) / words.length) * 100);
+
+                    showProgress(
+                        `正在翻译第 ${i + 1}/${words.length} 个单词: ${word.word}...`,
+                        percent
+                    );
+
+                    // 调用 GLM-4.7 翻译
+                    const newDefinitions = await translateWord(word.word);
+
+                    // 更新单词数据
+                    updatedWords.push({
+                        ...word,
+                        definitions: newDefinitions,
+                        source: 'glm-regenerated',
+                        updatedAt: Date.now()
+                    });
+
+                    // 每次调用后延迟，避免API限流
+                    await sleep(500);
+                }
+
+                // 保存到 localStorage
+                localStorage.setItem('wordlog_words', JSON.stringify(updatedWords));
+
+                showProgress('完成！', 100);
+                showOutput(`
+                    <strong>✅ 重新生成完成！</strong><br><br>
+                    已成功重新生成 ${updatedWords.length} 个单词的释义。<br><br>
+                    <a href="http://localhost:3001" style="color:#D97757;font-weight:bold;">点击返回主页面查看效果</a>
+                `);
+
+            } catch (error) {
+                showOutput(`❌ 重新生成失败：${error.message}`, true);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function translateWord(word) {
+            const systemPrompt = `You are a professional translator and an EdTech Product Manager.
+
+Translate content into fluent Chinese. For web novels (BG/Romance), ensure the tone is elegant and vivid.
+
+For professional documents, keep terms like PTE, IGCSE, A-Level in English and provide precise definitions in brackets.
+
+Avoid literal translation; focus on natural phrasing that suits a native speaker.
+
+Do not output anything other than the translated text.`;
+
+            const userPrompt = `请提供英文单词 "${word}" 的中文释义，严格按照以下JSON格式返回：
+
+{
+  "definitions": [
+    {
+      "partOfSpeech": "词性（如：名词、动词、形容词等）",
+      "definition": "简洁准确的中文释义，多个义项用分号；分隔",
+      "example": "简单的英文例句",
+      "exampleTranslation": "例句的中文翻译"
+    }
+  ]
+}
+
+只返回JSON，不要有任何其他内容。`;
+
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'glm-4',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
+                    ]
+                })
+                body: JSON.stringify({
+                    model: 'glm-4',
+                    messages: [{
+                        role: 'user',
+                        content: prompt
+                    }],
+                    temperature: 0.3,
+                    max_tokens: 500
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`API调用失败: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const content = result.choices[0].message.content;
+
+            // 解析 JSON
+            try {
+                const parsed = JSON.parse(content);
+                return parsed.definitions || [{
+                    partOfSpeech: '未知',
+                    definition: content,
+                    example: '',
+                    exampleTranslation: ''
+                }];
+            } catch (e) {
+                // JSON 解析失败，尝试手动解析
+                return parseManually(content, word);
+            }
+        }
+
+        function parseManually(content, word) {
+            // 简单的手动解析
+            const definitions = [];
+
+            // 提取词性和释义
+            const posMatch = content.match(/\[([^\]]+)\]\s*(.+)/);
+            if (posMatch) {
+                definitions.push({
+                    partOfSpeech: posMatch[1],
+                    definition: posMatch[2].trim(),
+                    example: '',
+                  exampleTranslation: ''
+                });
+            } else {
+                definitions.push({
+                    partOfSpeech: '未知',
+                    definition: content,
+                    example: '',
+                    exampleTranslation: ''
+                });
+            }
+
+            return definitions;
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function goBack() {
+            window.location.href = 'http://localhost:3001';
+        }
+    </script>
+</body>
+</html>

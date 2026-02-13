@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========== 全局样式 ========== */
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* 暗色模式 */
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+}
+
+/* ========== 自定义组件样式 ========== */
+@layer components {
+  /* 滚动条样式 */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-800;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-700;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+
+  /* 按钮基础样式 */
+  .btn-primary {
+    @apply bg-primary text-white px-4 py-2 rounded-lg font-medium transition-all duration-200;
+    @apply hover:bg-primary-hover hover:shadow-md;
+    @apply active:bg-primary-active active:transform active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-gray-700 px-4 py-2 rounded-lg font-medium border border-gray-200 transition-all duration-200;
+    @apply hover:bg-primary-light hover:text-primary hover:border-primary;
+  }
+
+  .dark .btn-secondary {
+    @apply bg-gray-800 text-gray-300 border-gray-700;
+    @apply hover:bg-primary/20;
+  }
+
+  /* 卡片样式 */
+  .card {
+    @apply bg-white rounded-lg border border-gray-200 shadow-sm;
+  }
+
+  .dark .card {
+    @apply bg-gray-800 border-gray-700;
+  }
+
+  /* 输入框样式 */
+  .input {
+    @apply w-full px-3 py-2 rounded-lg border border-gray-200 outline-none transition-colors;
+    @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
+
+  .dark .input {
+    @apply bg-gray-800 border-gray-700 text-gray-100;
+    @apply focus:border-primary focus:ring-primary/30;
+  }
+
+  /* Toast 动画 */
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 20px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+
+  .toast-enter {
+    animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* 淡入动画 */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  /* 加载动画 */
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  /* 骨架屏动画 */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  .dark .skeleton {
+    background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+    background-size: 1000px 100%;
+  }
+}
+
+/* ========== 工具类 ========== */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* 减少动画（尊重用户偏好） */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ========== 响应式断点 ========== */
+/* sm: 640px */
+/* md: 768px */
+/* lg: 1024px */
+/* xl: 1280px */
+/* 2xl: 1536px */
+
+/* ========== 打印样式 ========== */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    @apply bg-white text-black;
+  }
+}
