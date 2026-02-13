@@ -1517,11 +1517,11 @@ async function exportToObsidian() {
 
 // ========== 自动配图生成系统 ==========
 
-// 风格推荐系统（基于v2.0风格系统）
+// 风格推荐系统：名词→实物/3D，动词/形容词等→人物+辅助物品，更直观
 function recommendStyle(word, partOfSpeech) {
   const pos = (partOfSpeech || '').toLowerCase();
 
-  // 具体名词 - 使用实物摄影风格
+  // 名词 - 实物或3D
   if (pos.includes('名词') || pos.includes('noun')) {
     const concreteNouns = ['keyboard', 'camera', 'apple', 'book', 'phone', 'computer', 'laptop', 'mouse', 'table', 'chair', 'cup', 'glass', 'bottle', 'pen', 'pencil', 'car', 'bicycle', 'tree', 'flower', 'bird', 'cat', 'dog', 'house', 'door', 'window', 'piano', 'guitar', 'violin', 'camera', 'watch'];
     if (concreteNouns.includes(word.toLowerCase())) {
@@ -1530,24 +1530,23 @@ function recommendStyle(word, partOfSpeech) {
     return '3D';
   }
 
-  // 动词 - 使用3D动作风格
+  // 动词 - 人物+道具表现动作
   if (pos.includes('动词') || pos.includes('verb')) {
-    return '3D';
+    return 'PERSON_ACTION';
   }
 
-  // 形容词 - 使用墨绘或极简风格
-  if (pos.includes('形容词') || pos.includes('adjective')) {
-    return 'INK';
+  // 形容词/副词 - 人物或场景+辅助物品体现含义
+  if (pos.includes('形容词') || pos.includes('adjective') || pos.includes('adj') || pos.includes('副词') || pos.includes('adverb')) {
+    return 'PERSON_CONCEPT';
   }
 
-  // 抽象概念 - 使用墨绘风格
+  // 抽象概念 - 人物+象征物
   const abstractConcepts = ['freedom', 'love', 'peace', 'harmony', 'success', 'balance', 'serendipity', 'innovation', 'creativity', 'wisdom', 'hope', 'dream', 'courage', 'justice', 'truth'];
   if (abstractConcepts.includes(word.toLowerCase())) {
-    return 'INK';
+    return 'PERSON_CONCEPT';
   }
 
-  // 默认使用MINI风格
-  return 'MINI';
+  return 'PERSON_CONCEPT';
 }
 
 // 生成配图提示词（基于v2.0风格系统）
@@ -1560,6 +1559,12 @@ function generateImagePrompt(word, style, definition) {
 
     case '3D':
       return `${word}, 3D isometric style, high-quality 3D render, C4D style, Octane render, solid white background, studio lighting, soft shadows, 8k resolution${baseParams}, safe margin, no cropping`;
+
+    case 'PERSON_ACTION':
+      return `One 3D illustrated person (realistic cartoon style, diverse appearance) clearly performing the action "${word}", ${definition || ''}. The person must hold or interact with relevant props or objects that show the meaning at a glance. Full body or upper body, dynamic pose, clean white background, soft lighting, no text${baseParams}`;
+
+    case 'PERSON_CONCEPT':
+      return `One 3D illustrated scene with a person (realistic cartoon style) and supporting props or objects that together show the meaning of "${word}", ${definition || ''}. Use character expression, pose, and clear visual props to make the concept obvious. Clean white background, soft lighting, no text${baseParams}`;
 
     case 'INK':
       return `${word} concept, Japanese ink drawing style, sumi-e inspired, hand-drawn illustration with brush strokes, minimal elegant lines, white paper background, artistic${baseParams}`;
