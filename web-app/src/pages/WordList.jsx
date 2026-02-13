@@ -5,6 +5,7 @@ import WordCard from '../components/WordCard';
 import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import FlashcardMode from '../components/FlashcardMode';
+import MatchMode from '../components/MatchMode';
 import { fetchWordDefinition } from '../utils/dictionaryAPI';
 import { batchGenerateImages } from '../utils/imageAPI';
 import { analyzeWordForm, getWordForms } from '../utils/wordForms';
@@ -29,6 +30,7 @@ function WordList({ searchQuery, showToast }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateProgress, setGenerateProgress] = useState({ current: 0, total: 0, currentWord: '' });
   const [showFlashcard, setShowFlashcard] = useState(false);
+  const [showMatchMode, setShowMatchMode] = useState(false);
   const [masteryFilter, setMasteryFilter] = useState('all'); // all | unlearned | unknown | known
 
   // 掌握度统计
@@ -333,14 +335,27 @@ function WordList({ searchQuery, showToast }) {
             </div>
           </div>
 
-          {/* 闪卡按钮 */}
-          <button
-            onClick={() => setShowFlashcard(true)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-primary text-white hover:bg-primary-hover whitespace-nowrap`}
-          >
-            <Zap className="w-4 h-4" />
-            闪卡复习 ({masteryFilter === 'all' ? words.length : filteredWords.length})
-          </button>
+          {/* 闪卡 + 消消乐 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFlashcard(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-primary text-white hover:bg-primary-hover whitespace-nowrap`}
+            >
+              <Zap className="w-4 h-4" />
+              闪卡复习 ({masteryFilter === 'all' ? words.length : filteredWords.length})
+            </button>
+            <button
+              onClick={() => setShowMatchMode(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                theme === 'dark'
+                  ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                  : 'bg-gray-200 text-gray-800 hover:bg-gray-700'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              单词消消乐
+            </button>
+          </div>
         </div>
       )}
 
@@ -450,6 +465,14 @@ function WordList({ searchQuery, showToast }) {
           theme={theme}
           onClose={() => setShowFlashcard(false)}
           onPlay={(word) => playPronunciation(word, null)}
+        />
+      )}
+
+      {showMatchMode && (
+        <MatchMode
+          words={searchQuery ? filteredWords : (masteryFilter === 'all' ? words : filteredWords)}
+          theme={theme}
+          onClose={() => setShowMatchMode(false)}
         />
       )}
     </div>

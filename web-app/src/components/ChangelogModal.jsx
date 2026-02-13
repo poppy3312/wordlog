@@ -5,6 +5,17 @@ import { X, Calendar, Sparkles, Bug, Zap, Image, Settings } from 'lucide-react';
 const CHANGELOG = [
   {
     date: '2026-02-13',
+    version: 'v1.12.0',
+    name: '闪卡与单词消消乐',
+    items: [
+      { type: 'feature', icon: Sparkles, text: '单词消消乐：一屏5词、一局15词，答对答错音效与连对鼓励' },
+      { type: 'feature', icon: Zap, text: '闪卡默认显示图片，点击揭示单词/释义/例句' },
+      { type: 'improvement', icon: Settings, text: '闪卡「生/熟悉」：生隔4张再出现，标记即时持久化' },
+      { type: 'improvement', icon: Zap, text: '消消乐 5 词起开局；例句字号加大' },
+    ]
+  },
+  {
+    date: '2026-02-13',
     version: 'v1.11.1',
     name: '生图口令优化',
     items: [

@@ -1,10 +1,10 @@
 // WordLog 版本配置
 export const VERSION = {
   major: 1,
-  minor: 11,
-  patch: 1,
+  minor: 12,
+  patch: 0,
   build: '20260213',
-  name: '生图口令优化',
+  name: '闪卡与单词消消乐',
 
   // 完整版本号
   get fullVersion() {
