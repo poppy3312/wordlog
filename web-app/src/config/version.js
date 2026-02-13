@@ -2,9 +2,9 @@
 export const VERSION = {
   major: 1,
   minor: 12,
-  patch: 0,
+  patch: 1,
   build: '20260213',
-  name: '闪卡与单词消消乐',
+  name: '闪卡自然拼读与体验',
 
   // 完整版本号
   get fullVersion() {

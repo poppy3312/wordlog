@@ -4,6 +4,33 @@ import { useWordStore } from '../store/useWordStore';
 import { debouncedSaveWords, flushDebouncedSave } from '../utils/chromeStorage';
 
 const REINSERT_AFTER = 4; // 选「生」时隔几张牌再出现
+const SYLLABLE_PAUSE_MS = 380; // 自然拼读分段播放时的间隔（毫秒）
+
+/** 简单音节分割（辅元结构），用于自然拼读展示与分段播放 */
+function getSyllables(word) {
+  const w = word.toLowerCase();
+  if (!w.length) return [word];
+  const vowels = new Set('aeiou');
+  const isVowel = (c) => vowels.has(c);
+  const indices = [];
+  for (let i = 0; i < w.length; i++) if (isVowel(w[i])) indices.push(i);
+  if (indices.length <= 1) return [word];
+  const out = [];
+  let start = 0;
+  for (let k = 0; k < indices.length; k++) {
+    const v0 = indices[k];
+    const v1 = indices[k + 1];
+    if (v1 === undefined) {
+      out.push(w.slice(start));
+      break;
+    }
+    const between = v1 - v0 - 1;
+    const endIdx = between === 0 ? v0 + 1 : v0 + 1 + Math.min(1, between);
+    out.push(w.slice(start, endIdx));
+    start = endIdx;
+  }
+  return out.length ? out : [word];
+}
 
 function posToAbbr(pos) {
   const mapping = {
@@ -114,6 +141,43 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
     play(count);
   }, [currentWord, onPlay]);
 
+  /** 按音节分段播放，中间停顿，强化自然拼读；结束时调用 onComplete */
+  const playWordAudioBySyllables = useCallback((onComplete) => {
+    if (!currentWord?.word || !('speechSynthesis' in window)) {
+      onComplete?.();
+      return;
+    }
+    speechSynthesis.cancel();
+    const syllables = getSyllables(currentWord.word);
+    if (syllables.length <= 1) {
+      onPlay?.(currentWord.word);
+      setTimeout(() => { setIsPlaying(false); onComplete?.(); }, 600);
+      return;
+    }
+    setIsPlaying(true);
+    let i = 0;
+    const speakNext = () => {
+      if (i >= syllables.length) {
+        setTimeout(() => { setIsPlaying(false); onComplete?.(); }, 300);
+        return;
+      }
+      const u = new SpeechSynthesisUtterance(syllables[i]);
+      u.lang = 'en-US';
+      u.rate = 0.95;
+      u.onend = () => {
+        i++;
+        if (i < syllables.length) {
+          playTimeoutRef.current = setTimeout(speakNext, SYLLABLE_PAUSE_MS);
+        } else {
+          setTimeout(() => { setIsPlaying(false); onComplete?.(); }, 300);
+        }
+      };
+      u.onerror = () => { i++; setTimeout(speakNext, SYLLABLE_PAUSE_MS); };
+      speechSynthesis.speak(u);
+    };
+    speakNext();
+  }, [currentWord, onPlay]);
+
   const playExampleFallback = useCallback((example) => {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(example);
@@ -138,12 +202,34 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
     audio.play().catch(() => { currentAudioRef.current = null; playExampleFallback(example); });
   }, [playExampleFallback]);
 
+  // 查看释义时：第1遍正常 → 第2遍按音节停顿（自然拼读）→ 第3遍正常
   useEffect(() => {
-    if (isRevealed && currentWord) playWordAudio(2);
+    if (!isRevealed || !currentWord?.word || !('speechSynthesis' in window)) return;
+    if (playTimeoutRef.current) clearTimeout(playTimeoutRef.current);
+    speechSynthesis.cancel();
+    setIsPlaying(true);
+    const u1 = new SpeechSynthesisUtterance(currentWord.word);
+    u1.lang = 'en-US';
+    u1.onend = () => {
+      playTimeoutRef.current = setTimeout(() => {
+        playWordAudioBySyllables(() => {
+          playTimeoutRef.current = setTimeout(() => {
+            const u2 = new SpeechSynthesisUtterance(currentWord.word);
+            u2.lang = 'en-US';
+            u2.onend = () => setIsPlaying(false);
+            u2.onerror = () => setIsPlaying(false);
+            speechSynthesis.speak(u2);
+          }, 400);
+        });
+      }, 400);
+    };
+    u1.onerror = () => setIsPlaying(false);
+    speechSynthesis.speak(u1);
     return () => {
       if (playTimeoutRef.current) clearTimeout(playTimeoutRef.current);
+      speechSynthesis.cancel();
     };
-  }, [isRevealed, currentWord?.id]);
+  }, [isRevealed, currentWord?.id, playWordAudioBySyllables]);
 
   const saveMasteryData = useCallback(() => {
     const updateWord = useWordStore.getState().updateWord;
@@ -180,8 +266,10 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
     if (known) {
       setDeck(prev => prev.slice(1));
     } else {
-      const insertAt = Math.min(REINSERT_AFTER, prev.length - 1);
-      setDeck(prev => [...prev.slice(1, insertAt + 1), prev[0], ...prev.slice(insertAt + 1)]);
+      setDeck(prev => {
+        const insertAt = Math.min(REINSERT_AFTER, prev.length - 1);
+        return [...prev.slice(1, insertAt + 1), prev[0], ...prev.slice(insertAt + 1)];
+      });
     }
     setIsRevealed(false);
   }, [currentWord, deck.length, saveMasteryData, onClose]);
@@ -312,7 +400,13 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
               </p>
             </div>
           ) : (
-            <div className="absolute inset-0 flex flex-col p-6 overflow-hidden">
+            <div
+              className="absolute inset-0 flex flex-col p-6 overflow-hidden cursor-pointer"
+              onClick={() => playWordAudio(1)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playWordAudio(1); } }}
+            >
               <div className="flex flex-1 min-h-0">
                 {hasImage && (
                   <div className="w-1/3 flex-shrink-0 flex items-center justify-center pr-4">
@@ -324,14 +418,29 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
                   </div>
                 )}
                 <div className={`flex-1 overflow-y-auto ${hasImage ? 'pl-4 border-l border-gray-200 dark:border-gray-700' : ''}`}>
-                  <div className={`text-3xl xl:text-4xl font-bold text-primary mb-2 ${isPlaying ? 'animate-pulse' : ''}`}>
-                    {currentWord.word}
+                  <div className={`text-5xl xl:text-6xl 2xl:text-7xl font-bold mb-3 flex flex-wrap items-baseline gap-1 ${isPlaying ? 'animate-pulse' : ''}`}>
+                    {(() => {
+                      const syls = getSyllables(currentWord.word);
+                      let pos = 0;
+                      return syls.map((syl, i) => {
+                        const start = pos;
+                        pos += syl.length;
+                        return (
+                          <span
+                            key={i}
+                            className={i % 2 === 0 ? 'text-primary' : 'text-amber-600 dark:text-amber-400'}
+                          >
+                            {currentWord.word.slice(start, pos)}
+                          </span>
+                        );
+                      });
+                    })()}
                   </div>
                   {currentWord.pronunciation && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onPlay?.(currentWord.word); }}
-                      className={`flex items-center gap-2 text-lg mb-4 ${theme === 'dark' ? 'text-gray-400 hover:text-primary' : 'text-gray-500 hover:text-primary'}`}
+                      className={`flex items-center gap-2 text-xl xl:text-2xl mb-4 ${theme === 'dark' ? 'text-gray-400 hover:text-primary' : 'text-gray-500 hover:text-primary'}`}
                     >
                       <Volume2 className={`w-5 h-5 ${isPlaying ? 'animate-bounce text-primary' : ''}`} />
                       <span>{currentWord.pronunciation}</span>
@@ -351,11 +460,11 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
                           onClick={(e) => { e.stopPropagation(); playExample(def.example); }}
                         >
                           <Volume2 className={`w-4 h-4 mt-0.5 flex-shrink-0 ${playingExample === def.example ? 'animate-pulse' : ''}`} />
-                          <span className="text-lg italic">"{def.example}"</span>
+                          <span className="text-xl xl:text-2xl italic">"{def.example}"</span>
                         </div>
                       )}
                       {def.exampleTranslation && (
-                        <p className={`text-sm pl-8 mt-0.5 ${theme === 'dark' ? 'text-gray-600' : 'text-gray-500'}`}>
+                        <p className={`text-base xl:text-lg pl-8 mt-0.5 ${theme === 'dark' ? 'text-gray-600' : 'text-gray-500'}`}>
                           {def.exampleTranslation}
                         </p>
                       )}
@@ -367,7 +476,7 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
               <div className={`flex items-center justify-center gap-4 pt-4 mt-auto border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
                 <button
                   type="button"
-                  onClick={() => markResult(false)}
+                  onClick={(e) => { e.stopPropagation(); markResult(false); }}
                   className={`px-6 py-2.5 rounded-xl font-medium transition-all ${
                     theme === 'dark' ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                   }`}
@@ -376,7 +485,7 @@ function FlashcardMode({ words, theme, onClose, onPlay }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => markResult(true)}
+                  onClick={(e) => { e.stopPropagation(); markResult(true); }}
                   className="px-6 py-2.5 rounded-xl font-medium bg-green-500 text-white hover:bg-green-600 transition-all"
                 >
                   熟悉 (2)

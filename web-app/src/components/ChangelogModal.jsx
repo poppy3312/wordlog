@@ -5,6 +5,16 @@ import { X, Calendar, Sparkles, Bug, Zap, Image, Settings } from 'lucide-react';
 const CHANGELOG = [
   {
     date: '2026-02-13',
+    version: 'v1.12.1',
+    name: '闪卡自然拼读与体验',
+    items: [
+      { type: 'improvement', icon: Zap, text: '自然拼读：单词分段双色显示，第2遍按音节间隔播放' },
+      { type: 'improvement', icon: Zap, text: '查看释义时点击空白即播单词；单词与例句字号加大' },
+      { type: 'fix', icon: Bug, text: '选「生」后正确切到下一张' },
+    ]
+  },
+  {
+    date: '2026-02-13',
     version: 'v1.12.0',
     name: '闪卡与单词消消乐',
     items: [

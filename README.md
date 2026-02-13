@@ -2,7 +2,7 @@
 
 > 单词收藏助手 - Chrome 插件 + Web 应用
 
-[![Version](https://img.shields.io/badge/version-v1.12.0-orange)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v1.12.1-orange)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ## 📸 界面预览
