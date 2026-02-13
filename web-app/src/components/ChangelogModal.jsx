@@ -5,6 +5,15 @@ import { X, Calendar, Sparkles, Bug, Zap, Image, Settings } from 'lucide-react';
 const CHANGELOG = [
   {
     date: '2026-02-13',
+    version: 'v1.11.1',
+    name: '生图口令优化',
+    items: [
+      { type: 'improvement', icon: Image, text: '动词：人物+道具表现动作，不再用小企鹅' },
+      { type: 'improvement', icon: Zap, text: '形容词/副词：人物或场景+辅助物品，更直观' },
+    ]
+  },
+  {
+    date: '2026-02-13',
     version: 'v1.11.0',
     name: '查词/生图/导出与保存逻辑优化',
     items: [

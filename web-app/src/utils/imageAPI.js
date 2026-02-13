@@ -240,32 +240,28 @@ export async function generateWordImage(word, partOfSpeech, definition, maxRetri
  * @param {Array} words - 单词数组
  * @param {Function} onProgress - 进度回调函数 (current, total, currentWord)
  * @param {Boolean} forceRegenerate - 是否强制重新生成所有配图（包括已有配图的）
- * @returns {Promise<Array>} 更新后的单词数组
+ * @returns {Promise<{ words: Array, successCount: number, failCount: number }>} 更新后的单词数组与成功/失败数
  */
 export async function batchGenerateImages(words, onProgress, forceRegenerate = false) {
   const results = [];
+  let successCount = 0;
+  let failCount = 0;
 
-  // 【修改】现在总是处理所有单词，每次都替换为最新的一版配图
-  // 如果是 forceRegenerate=true，强制重新生成；否则只生成没有配图的单词
   const wordsToProcess = forceRegenerate ? words : words.filter(w => !w.imageUrl || w.imageUrl.length === 0);
-
   let current = 0;
 
   for (const word of words) {
-    // 如果不是强制重新生成，跳过已有图片的单词
     if (!forceRegenerate && word.imageUrl && word.imageUrl.length > 0) {
       results.push(word);
       continue;
     }
 
-    // 获取主要词性和释义
     const primaryDef = word.definitions?.[0];
     if (!primaryDef) {
       results.push(word);
       continue;
     }
 
-    // 更新进度
     current++;
     if (onProgress) {
       onProgress(current, wordsToProcess.length, word.word);
@@ -277,20 +273,19 @@ export async function batchGenerateImages(words, onProgress, forceRegenerate = f
         primaryDef.partOfSpeech,
         primaryDef.definition
       );
-
-      // 【修改】只保留最新的一版配图，使用单元素数组
       results.push({
         ...word,
         imageUrl: imageUrl ? [imageUrl] : []
       });
-
-      // 避免请求过快（每个单词间隔2秒）
+      if (imageUrl) successCount++;
+      else failCount++;
       await sleep(2000);
     } catch (error) {
       console.error(`生成 ${word.word} 配图失败:`, error);
       results.push(word);
+      failCount++;
     }
   }
 
-  return results;
+  return { words: results, successCount, failCount };
 }

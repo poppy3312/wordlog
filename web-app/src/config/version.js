@@ -2,9 +2,9 @@
 export const VERSION = {
   major: 1,
   minor: 11,
-  patch: 0,
+  patch: 1,
   build: '20260213',
-  name: '查词/生图/导出与保存逻辑优化',
+  name: '生图口令优化',
 
   // 完整版本号
   get fullVersion() {

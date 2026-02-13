@@ -59,11 +59,17 @@ function WordList({ searchQuery, showToast }) {
         setGenerateProgress({ current, total, currentWord });
       };
 
-      const updatedWords = await batchGenerateImages(words, onProgress);
+      const { words: updatedWords, successCount, failCount } = await batchGenerateImages(words, onProgress);
       setWords(updatedWords);
       const { debouncedSaveWords } = await import('../utils/chromeStorage');
       debouncedSaveWords(updatedWords);
-      showToast('success', `✅ 配图生成完成！`);
+      if (failCount === 0) {
+        showToast('success', `✅ 配图生成完成！共 ${successCount} 个`);
+      } else if (successCount > 0) {
+        showToast('warning', `完成：成功 ${successCount} 个，${failCount} 个未生成，可稍后重试`);
+      } else {
+        showToast('error', '生成失败，请检查配置或网络后重试');
+      }
     } catch (error) {
       console.error('批量生成失败:', error);
       showToast('error', '生成失败，请稍后重试');
