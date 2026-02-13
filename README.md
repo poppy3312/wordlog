@@ -2,8 +2,14 @@
 
 > 单词收藏助手 - Chrome 插件 + Web 应用
 
-[![Version](https://img.shields.io/badge/version-v1.7.0-orange)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v1.11.0-orange)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+## 📸 界面预览
+
+| 单词列表 | 单词详情 | 闪卡模式 |
+|---------|---------|---------|
+| ![单词列表](./docs/screenshot-list.png) | ![单词详情](./docs/screenshot-detail.png) | ![闪卡模式](./docs/screenshot-flashcard.png) |
 
 ## 🎯 简介
 
@@ -37,6 +43,7 @@ npm run dev
 WordLog-WebApp/
 ├── chrome-extension/    # Chrome 插件
 ├── web-app/             # React Web 应用
+├── docs/                # 界面截图等文档资源
 ├── CHANGELOG.md         # 更新日志
 ├── QUICKSTART.md        # 快速开始指南
 └── README.md            # 本文件
