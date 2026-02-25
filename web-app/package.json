@@ -1,6 +1,6 @@
 {
   "name": "wordlog-webapp",
-  "version": "1.5.0",
+  "version": "1.12.3",
   "description": "WordLog - 智能单词本工具 | Chrome扩展 + React网页应用 | 自动查询释义音标例句 | 超大输入框 | 高质量语音朗读",
   "author": "素素 & Claude",
   "license": "MIT",
@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "deploy": "npm run build && npx vercel@34 --prod --yes",
     "sync-version": "node scripts/sync-version.js",
     "version:patch": "node scripts/bump-version.js patch",
     "version:minor": "node scripts/bump-version.js minor",
