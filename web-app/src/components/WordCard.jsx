@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Volume2, Calendar, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import { extractKeywordFromDefinition } from '../utils/dictionaryAPI';
+import WordImage from './WordImage';
 
 function WordCard({ word, theme, onClick, onPlay, onCopy }) {
   // 图片轮播索引
@@ -92,36 +93,43 @@ function WordCard({ word, theme, onClick, onPlay, onCopy }) {
             ${theme === 'dark' ? 'bg-gradient-to-br from-primary/20 to-primary/10' : 'bg-gradient-to-br from-primary/10 to-primary/5'}
           `}
         >
-          {word.imageUrl && word.imageUrl[0] ? (
-            <>
-              <img src={word.imageUrl[imageIndex]} alt={word.word} className="w-full h-full object-contain" />
-              {/* 多张图片时显示切换按钮 */}
-              {imageCount > 1 && (
-                <>
-                  <span className={`absolute bottom-1 right-1 text-[10px] px-1 rounded ${theme === 'dark' ? 'bg-gray-900/80 text-gray-300' : 'bg-white/80 text-gray-600'}`}>
-                    {imageIndex + 1}/{imageCount}
-                  </span>
-                </>
-              )}
-            </>
-          ) : (
-            <span className="text-lg font-bold text-primary truncate px-1 text-center">
-              {keyword}
+          <WordImage
+            src={word.imageUrl?.[imageIndex]}
+            alt={word.word}
+            keyword={keyword}
+            theme={theme}
+            className="w-full h-full object-contain"
+          />
+          {imageCount > 1 && word.imageUrl?.[0] && (
+            <span className={`absolute bottom-1 right-1 text-[10px] px-1 rounded z-10 ${theme === 'dark' ? 'bg-gray-900/80 text-gray-300' : 'bg-white/80 text-gray-600'}`}>
+              {imageIndex + 1}/{imageCount}
             </span>
           )}
         </div>
 
         <div className="flex-1 p-3 min-w-0 flex flex-col">
-          {/* 单词 - 点击播放 */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onPlay();
-            }}
-            className="text-lg font-semibold text-primary hover:underline transition-all text-left w-full"
-          >
-            <span className="block truncate">{word.word}</span>
-          </button>
+          <div className="flex items-center gap-3 min-h-[52px]">
+            {/* 单词 - 点击播放 */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlay();
+              }}
+              className="text-lg font-semibold text-primary hover:underline transition-all text-left flex-1 min-w-0 py-2"
+            >
+              <span className="block truncate">{word.word}</span>
+            </button>
+            {/* 突出的播放按钮 - 大点击区域，易点 */}
+            <button
+              type="button"
+              onClick={handlePlay}
+              className="flex-shrink-0 w-12 h-12 min-w-[48px] min-h-[48px] rounded-full bg-primary text-white shadow-md hover:bg-primary-hover hover:shadow-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer touch-manipulation"
+              title="播放单词（3 次）"
+              aria-label="播放单词"
+            >
+              <Volume2 className="w-6 h-6" />
+            </button>
+          </div>
 
           {/* 释义区域 - 显示1-3个词性的简短释义，同一词性合并一行 */}
           <div className="mt-1.5 flex-1 min-h-0">
@@ -227,17 +235,20 @@ function truncateDefinition(definition, addSemiColon = true) {
   return definition + (addSemiColon ? '；' : '');
 }
 
-// 词性中文转英文缩写
+// 词性转缩写（支持中文与英文，如 noun -> n.）
 function posToAbbr(pos) {
   const mapping = {
-    '名词': 'n.',
-    '动词': 'v.',
-    '形容词': 'adj.',
-    '副词': 'adv.',
-    '其他': 'other',
-    '未知': 'unknown'
+    '名词': 'n.', '动词': 'v.', '形容词': 'adj.', '副词': 'adv.',
+    '代词': 'pron.', '介词': 'prep.', '连词': 'conj.', '感叹词': 'interj.',
+    '其他': 'other', '未知': '—',
+    noun: 'n.', verb: 'v.', adjective: 'adj.', adverb: 'adv.',
+    pronoun: 'pron.', preposition: 'prep.', conjunction: 'conj.', interjection: 'interj.',
+    unknown: '—'
   };
-  return mapping[pos] || pos;
+  const raw = (pos || '').trim();
+  if (!raw) return '—';
+  const key = raw.toLowerCase();
+  return mapping[raw] ?? mapping[key] ?? raw;
 }
 
 // 截断例句（只显示前40个字符）

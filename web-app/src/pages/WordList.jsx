@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Trash2, Calendar, BookOpen, Volume2, X, RefreshCw, Copy, ChevronLeft, ChevronRight, Info, Zap, Wand2, Sparkles } from 'lucide-react';
 import { useWordStore } from '../store/useWordStore';
 import WordCard from '../components/WordCard';
+import WordImage from '../components/WordImage';
 import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import FlashcardMode from '../components/FlashcardMode';
@@ -9,18 +10,38 @@ import MatchMode from '../components/MatchMode';
 import { fetchWordDefinition } from '../utils/dictionaryAPI';
 import { batchGenerateImages } from '../utils/imageAPI';
 import { analyzeWordForm, getWordForms } from '../utils/wordForms';
+import { unlockAudioForChrome, runAfterUnlock, hasAudioUnlocked, markAudioUnlocked, stopWordPlayback } from '../utils/audioUnlock';
+import { playWithGoogleTTS } from '../utils/ttsGoogle';
 
-// 词性中文转英文缩写
+// 供「启用发音」按钮做测试音用（先试 Google TTS，再试 speechSynthesis）
+function playTestOK() {
+  runAfterUnlock(() => {
+    playWithGoogleTTS('OK', () => {}, () => {
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance('OK');
+        u.lang = 'en-US';
+        u.volume = 1;
+        speechSynthesis.speak(u);
+      }
+    });
+  });
+}
+
+// 词性转缩写（支持中文与英文，如 noun -> n.）
 function posToAbbr(pos) {
   const mapping = {
-    '名词': 'n.',
-    '动词': 'v.',
-    '形容词': 'adj.',
-    '副词': 'adv.',
-    '其他': 'other',
-    '未知': 'unknown'
+    '名词': 'n.', '动词': 'v.', '形容词': 'adj.', '副词': 'adv.',
+    '代词': 'pron.', '介词': 'prep.', '连词': 'conj.', '感叹词': 'interj.',
+    '其他': 'other', '未知': '—',
+    noun: 'n.', verb: 'v.', adjective: 'adj.', adverb: 'adv.',
+    pronoun: 'pron.', preposition: 'prep.', conjunction: 'conj.', interjection: 'interj.',
+    unknown: '—'
   };
-  return mapping[pos] || pos;
+  const raw = (pos || '').trim();
+  if (!raw) return '—';
+  const key = raw.toLowerCase();
+  return mapping[raw] ?? mapping[key] ?? raw;
 }
 
 function WordList({ searchQuery, showToast }) {
@@ -32,6 +53,7 @@ function WordList({ searchQuery, showToast }) {
   const [showFlashcard, setShowFlashcard] = useState(false);
   const [showMatchMode, setShowMatchMode] = useState(false);
   const [masteryFilter, setMasteryFilter] = useState('all'); // all | unlearned | unknown | known
+  const [showUnlockBanner, setShowUnlockBanner] = useState(() => !hasAudioUnlocked());
 
   // 掌握度统计
   const masteryStats = useMemo(() => {
@@ -181,66 +203,109 @@ function WordList({ searchQuery, showToast }) {
     return voices.find(v => v.lang.startsWith('en')) || null;
   };
 
-  // 播放发音（优先使用真实音频，否则使用 Web Speech API）
-  const playPronunciation = (wordText, audioUrl) => {
-    // 优先使用真实音频（自然度更高）
-    if (audioUrl && audioUrl.length > 0) {
-      // 取消当前正在播放的音频
-      if (window.currentAudio) {
-        window.currentAudio.pause();
-        window.currentAudio = null;
+  const PLAY_GAP_MS = 650; // 连续播放时的间隔（毫秒），确保上一遍念完再播下一遍
+
+  // 播放发音（优先真实音频，否则 TTS）。支持播放次数，onDone 在整轮结束后调用
+  // 整段放入 runAfterUnlock，确保 Chrome 在用户手势后完成静音解锁再播，避免无声音
+  const playPronunciation = (wordText, audioUrl, onDone, playCount = 3) => {
+    const text = typeof wordText === 'string' ? wordText : (wordText?.word ?? '');
+    if (!text) return;
+
+    runAfterUnlock(() => {
+      stopWordPlayback();
+      unlockAudioForChrome();
+
+      let url = typeof audioUrl === 'string' && audioUrl.length > 0 ? audioUrl : null;
+      // HTTPS 页面加载 http 音频会被混合内容策略拦截，统一升为 https
+      if (url && typeof window !== 'undefined' && window.location?.protocol === 'https:' && /^http:\/\//i.test(url)) {
+        url = url.replace(/^http:\/\//i, 'https://');
       }
+      const times = Math.max(1, Math.min(10, Number(playCount) || 3));
 
-      const audio = new Audio(audioUrl);
-      window.currentAudio = audio;
+      const playOnce = (whenDone) => {
+        const done = () => { window.currentAudio = null; whenDone?.(); };
 
-      audio.play().catch(error => {
-        console.warn('真实音频播放失败，回退到 TTS:', error);
-        // 回退到 TTS
-        playWithTTS(wordText);
-      });
+        if (url) {
+          try {
+            if (window.currentAudio) {
+              window.currentAudio.pause();
+              window.currentAudio.currentTime = 0;
+              window.currentAudio = null;
+            }
+            const audio = new Audio(url);
+            audio.volume = 1.0;
+            window.currentAudio = audio;
+            const fallbackToTTS = () => {
+              if (window.currentAudio === audio) {
+                window.currentAudio = null;
+                playWithTTS(text, done);
+              }
+            };
+            audio.onended = () => { if (window.currentAudio === audio) done(); };
+            audio.onerror = fallbackToTTS;
+            audio.onabort = fallbackToTTS;
+            audio.play().catch(fallbackToTTS);
+          } catch (err) {
+            console.warn('音频创建失败，使用 TTS:', err);
+            window.currentAudio = null;
+            playWithTTS(text, done);
+          }
+          return;
+        }
+        playWithTTS(text, done);
+      };
 
-      return;
-    }
-
-    // 没有真实音频，使用 TTS
-    playWithTTS(wordText);
-  };
-
-  // 使用 Web Speech API 播放（备用方案）
-  const playWithTTS = (wordText) => {
-    if ('speechSynthesis' in window) {
-      // 取消当前正在播放的
-      speechSynthesis.cancel();
-
-      // 确保语音已加载
-      const voices = speechSynthesis.getVoices();
-      if (voices.length === 0) {
-        // 等待语音加载
-        speechSynthesis.onvoiceschanged = () => {
-          setTimeout(() => playWithTTS(wordText), 100);
-        };
-        // 手动触发一次语音加载
-        speechSynthesis.getVoices();
+      if (times <= 1) {
+        playOnce(onDone);
         return;
       }
+      let n = 0;
+      const scheduleNext = () => {
+        n++;
+        if (n >= times) { onDone?.(); return; }
+        setTimeout(() => playOnce(scheduleNext), PLAY_GAP_MS);
+      };
+      playOnce(scheduleNext);
+    });
+  };
 
-      const utterance = new SpeechSynthesisUtterance(wordText);
-      const bestVoice = getBestEnglishVoice();
+  // TTS：优先用 Google TTS 链接（不依赖 speechSynthesis），失败再用 Web Speech API
+  const playWithTTS = (wordText, onDone) => {
+    const text = typeof wordText === 'string' ? wordText : (wordText?.word ?? '');
+    const t = String(text || '').trim();
+    if (!t) { onDone?.(); return; }
 
-      if (bestVoice) {
-        utterance.voice = bestVoice;
+    let didSpeak = false;
+    const doSpeakWithBrowser = () => {
+      if (didSpeak) return;
+      if (!('speechSynthesis' in window)) { onDone?.(); return; }
+      didSpeak = true;
+      try {
+        speechSynthesis.cancel();
+        if (typeof speechSynthesis.resume === 'function') speechSynthesis.resume();
+        const voices = speechSynthesis.getVoices();
+        const utterance = new SpeechSynthesisUtterance(t);
+        if (voices.length > 0) {
+          const best = getBestEnglishVoice();
+          if (best) utterance.voice = best;
+        }
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
+        utterance.pitch = 0.98;
+        utterance.volume = 1.0;
+        // Chrome 有时 onend 过早触发，加 120ms 缓冲避免连读时下一遍提前开始
+        utterance.onend = () => setTimeout(() => onDone?.(), 120);
+        utterance.onerror = () => setTimeout(() => onDone?.(), 120);
+        speechSynthesis.speak(utterance);
+      } catch (err) {
+        onDone?.();
       }
+    };
 
-      utterance.lang = 'en-US';
-      utterance.rate = 1.0;      // 正常语速，更自然流畅
-      utterance.pitch = 0.98;    // 稍微降低音调，更沉稳
-      utterance.volume = 1.0;    // 最大音量
-
-      speechSynthesis.speak(utterance);
-    } else {
-      console.warn('浏览器不支持语音合成');
-    }
+    runAfterUnlock(() => {
+      // 先试 Google TTS（部分 Chrome 下 speechSynthesis 无声音）
+      playWithGoogleTTS(t, onDone, doSpeakWithBrowser);
+    });
   };
 
   // 页面加载时预加载语音
@@ -278,6 +343,27 @@ function WordList({ searchQuery, showToast }) {
 
   return (
     <div className="space-y-6">
+      {/* Chrome 等浏览器需先点击启用发音，否则喇叭无声音 */}
+      {showUnlockBanner && words.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            unlockAudioForChrome();
+            markAudioUnlocked();
+            setShowUnlockBanner(false);
+            showToast?.('info', '已启用发音，可点击单词旁的喇叭试听');
+            playTestOK();
+          }}
+          className={`w-full py-2.5 px-4 rounded-lg border text-sm font-medium flex items-center justify-center gap-2
+            ${theme === 'dark'
+              ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 hover:bg-amber-500/30'
+              : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+            }`}
+        >
+          <Volume2 className="w-4 h-4 flex-shrink-0" />
+          点击此处启用发音（Chrome 需先点击一次）
+        </button>
+      )}
       {/* 掌握度筛选 + 闪卡模式 - 合并到一行 */}
       {!searchQuery && words.length > 0 && (
         <div className={`flex items-center justify-between gap-4 p-4 rounded-lg border ${theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
@@ -349,7 +435,7 @@ function WordList({ searchQuery, showToast }) {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
                 theme === 'dark'
                   ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                  : 'bg-gray-200 text-gray-800 hover:bg-gray-700'
+                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
               }`}
             >
               <Sparkles className="w-4 h-4" />
@@ -443,28 +529,38 @@ function WordList({ searchQuery, showToast }) {
       ))}
 
       {/* 单词详情弹窗 */}
-      {selectedWord && (
+      {selectedWord && (() => {
+        const flatWords = groupedWords.flatMap(([, ws]) => ws);
+        const currentIdx = flatWords.findIndex(w => w.id === selectedWord.id);
+        const hasPrev = currentIdx > 0;
+        const hasNext = currentIdx >= 0 && currentIdx < flatWords.length - 1;
+        return (
         <WordDetailModal
           word={selectedWord}
           theme={theme}
           onClose={() => setSelectedWord(null)}
           onDelete={() => handleDelete(selectedWord.id)}
-          onPlay={() => playPronunciation(selectedWord.word, selectedWord.audioUrl)}
+          onPlay={(w) => playPronunciation((w || selectedWord)?.word, (w || selectedWord)?.audioUrl)}
           onWordUpdate={(updatedWord) => setSelectedWord(updatedWord)}
+          onPrev={hasPrev ? () => setSelectedWord(flatWords[currentIdx - 1]) : undefined}
+          onNext={hasNext ? () => setSelectedWord(flatWords[currentIdx + 1]) : undefined}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
           showToast={showToast}
         />
-      )}
+        );
+      })()}
 
       {/* 加载状态 */}
       {isLoading && <LoadingOverlay theme={theme} />}
 
-      {/* 闪卡模式 */}
+      {/* 闪卡模式：onPlay 传入当前单词对象，支持 (wordObj, onDone) 以便串联播放与使用真实音频 */}
       {showFlashcard && (
         <FlashcardMode
           words={searchQuery ? filteredWords : (masteryFilter === 'all' ? words : filteredWords)}
           theme={theme}
           onClose={() => setShowFlashcard(false)}
-          onPlay={(word) => playPronunciation(word, null)}
+          onPlay={(wordObj, onDone, playCount) => playPronunciation(wordObj?.word ?? wordObj, wordObj?.audioUrl, onDone, playCount ?? (onDone != null ? 1 : 3))}
         />
       )}
 
@@ -473,6 +569,7 @@ function WordList({ searchQuery, showToast }) {
           words={searchQuery ? filteredWords : (masteryFilter === 'all' ? words : filteredWords)}
           theme={theme}
           onClose={() => setShowMatchMode(false)}
+          onPlay={(word) => playPronunciation(word?.word ?? word, word?.audioUrl)}
         />
       )}
     </div>
@@ -500,7 +597,7 @@ function formatDate(dateString) {
 }
 
 // 单词详情弹窗
-function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate, showToast }) {
+function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate, showToast, onPrev, onNext, hasPrev, hasNext }) {
   const [currentWord, setCurrentWord] = useState(word);
   const [playingExample, setPlayingExample] = useState(null);
   const [playingForm, setPlayingForm] = useState(null); // 新增：正在播放的时态
@@ -748,6 +845,60 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose, wordDetail]);
 
+  // 键盘：方向键切换单词，1/2 标记生疏/熟悉
+  useEffect(() => {
+    const handleKey = (e) => {
+      const tag = e.target?.tagName?.toUpperCase();
+      if (['INPUT', 'TEXTAREA'].includes(tag) || e.target?.isContentEditable) return;
+      switch (e.key) {
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          e.preventDefault();
+          if (hasPrev && onPrev) onPrev();
+          break;
+        case 'ArrowRight':
+        case 'ArrowDown':
+          e.preventDefault();
+          if (hasNext && onNext) onNext();
+          break;
+        case '1':
+          e.preventDefault();
+          (async () => {
+            const { updateWord } = useWordStore.getState();
+            const { debouncedSaveWords, flushDebouncedSave } = await import('../utils/chromeStorage');
+            const masteryLevel = 'unknown';
+            const updatedWord = { ...currentWord, masteryLevel };
+            updateWord(currentWord.id, { masteryLevel });
+            setCurrentWord(updatedWord);
+            onWordUpdate?.(updatedWord);
+            debouncedSaveWords(useWordStore.getState().words);
+            flushDebouncedSave();
+            showToast?.('success', '已标记为生疏');
+          })();
+          break;
+        case '2':
+          e.preventDefault();
+          (async () => {
+            const { updateWord } = useWordStore.getState();
+            const { debouncedSaveWords, flushDebouncedSave } = await import('../utils/chromeStorage');
+            const masteryLevel = 'known';
+            const updatedWord = { ...currentWord, masteryLevel };
+            updateWord(currentWord.id, { masteryLevel });
+            setCurrentWord(updatedWord);
+            onWordUpdate?.(updatedWord);
+            debouncedSaveWords(useWordStore.getState().words);
+            flushDebouncedSave();
+            showToast?.('success', '已标记为熟悉');
+          })();
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [hasPrev, hasNext, onPrev, onNext, currentWord, onWordUpdate, showToast]);
+
   // 预加载语音（确保点击播放时语音已就绪）
   useEffect(() => {
     if ('speechSynthesis' in window) {
@@ -790,71 +941,37 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
     return voices.find(v => v.lang.startsWith('en')) || null;
   };
 
-  // 播放例句
+  // 播放例句：先暂停单词播放，再播例句（先试 Google TTS，失败再用 speechSynthesis）
   const playExample = (example) => {
-    console.log('播放例句:', example);
+    if (!example || typeof example !== 'string') return;
 
-    if ('speechSynthesis' in window) {
-      // 取消当前正在播放的内容
-      speechSynthesis.cancel();
+    stopWordPlayback();
+    const done = () => { setPlayingExample(null); setLoadingAudio(false); };
 
-      // 显示加载中提示
-      setLoadingAudio(true);
+    setPlayingExample(example);
+    setLoadingAudio(true);
 
-      // 确保语音已加载
-      const voices = speechSynthesis.getVoices();
-      if (voices.length === 0) {
-        // 语音未加载，等待加载后再播放
-        console.log('等待语音加载...');
-        speechSynthesis.onvoiceschanged = () => {
-          setTimeout(() => playExample(example), 100);
-        };
-        // 手动触发语音加载
-        speechSynthesis.getVoices();
-        setLoadingAudio(false);
-        return;
-      }
-
-      // 短暂延迟后开始播放，确保UI有时间显示加载状态
-      setTimeout(() => {
-        const utterance = new SpeechSynthesisUtterance(example);
-
-        // 使用最佳语音
-        const bestVoice = getBestEnglishVoice();
-        if (bestVoice) {
-          utterance.voice = bestVoice;
-          console.log('使用语音:', bestVoice.name);
-        } else {
-          console.warn('未找到合适的英语语音，使用默认语音');
+    runAfterUnlock(() => {
+      const fallback = () => {
+        if (!('speechSynthesis' in window)) { done(); return; }
+        speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(example.trim());
+        const voices = speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          const best = getBestEnglishVoice();
+          if (best) utterance.voice = best;
         }
-
         utterance.lang = 'en-US';
-        utterance.rate = 1.0;      // 正常语速，更自然
-        utterance.pitch = 0.95;    // 稍微降低音调，更沉稳自然
+        utterance.rate = 1.0;
+        utterance.pitch = 0.95;
         utterance.volume = 1.0;
-
-        // 播放开始时设置状态
-        setPlayingExample(example);
-        setLoadingAudio(false);
-
-        // 播放结束时清除状态
-        utterance.onend = () => {
-          console.log('播放完成');
-          setPlayingExample(null);
-        };
-
-        utterance.onerror = (e) => {
-          console.error('播放错误:', e);
-          setPlayingExample(null);
-          setLoadingAudio(false);
-        };
-
+        utterance.onend = done;
+        utterance.onerror = done;
         speechSynthesis.speak(utterance);
-      }, 300); // 300ms延迟让UI显示加载状态
-    } else {
-      console.warn('浏览器不支持语音合成');
-      setLoadingAudio(false);
-    }
+        setLoadingAudio(false);
+      };
+      playWithGoogleTTS(example.trim(), done, fallback);
+    });
   };
 
   // 重新生成释义（后台异步生成）
@@ -901,6 +1018,32 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
       onClick={onClose}
     >
+      {/* 左侧：上一词 */}
+      {hasPrev && onPrev && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onPrev(); }}
+          className={`absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full transition-all hover:scale-110 active:scale-95
+            ${theme === 'dark' ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-black/15 text-gray-800 hover:bg-black/25'}`}
+          title="上一词"
+          aria-label="上一词"
+        >
+          <ChevronLeft className="w-6 h-6 sm:w-7 sm:h-7" />
+        </button>
+      )}
+      {/* 右侧：下一词 */}
+      {hasNext && onNext && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onNext(); }}
+          className={`absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full transition-all hover:scale-110 active:scale-95
+            ${theme === 'dark' ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-black/15 text-gray-800 hover:bg-black/25'}`}
+          title="下一词"
+          aria-label="下一词"
+        >
+          <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7" />
+        </button>
+      )}
       <div
         className={`relative w-full max-w-md rounded-lg shadow-xl custom-scrollbar overflow-y-auto max-h-[90vh] ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}
         onClick={(e) => e.stopPropagation()}
@@ -908,7 +1051,8 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
         {/* 头部：单词和操作按钮 */}
         <div className={`flex items-center justify-between p-6 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
           <button
-            onClick={onPlay}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPlay?.(currentWord); }}
             className={`text-4xl font-bold text-primary hover:underline transition-all text-left truncate flex-1`}
           >
             {word.word}
@@ -938,15 +1082,21 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
           </div>
         </div>
 
-        {/* 音标 */}
-        {word.pronunciation && (
-          <div className={`px-6 pt-2 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-600'}`}>
+        {/* 音标 + 添加时间 */}
+        <div className={`px-6 pt-2 pb-3 flex items-center justify-between gap-4 flex-wrap ${theme === 'dark' ? 'text-gray-500' : 'text-gray-600'}`}>
+          {word.pronunciation && (
             <div className="flex items-center gap-2 text-sm">
-              <Volume2 className="w-3.5 h-3.5 cursor-pointer hover:text-primary transition-colors" onClick={onPlay} />
+              <Volume2
+                className="w-3.5 h-3.5 cursor-pointer hover:text-primary transition-colors"
+                onClick={(e) => { e.stopPropagation(); onPlay?.(currentWord); }}
+              />
               <span className="truncate">{word.pronunciation}</span>
             </div>
-          </div>
-        )}
+          )}
+          <span className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+            添加于 {new Date(word.createdAt).toLocaleString('zh-CN')}
+          </span>
+        </div>
 
         {/* 释义列表 - 按词性分组合并 */}
         <div className="p-6 space-y-3">
@@ -1048,15 +1198,25 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
             ));
           })()}
 
-          {/* 配图显示 - 如果有导入的配图 */}
+          {/* 配图显示 - 如果有导入的配图，点击图片播放单词 */}
           {currentWord.imageUrl && currentWord.imageUrl[0] && (
             <div className="mt-4">
-              <div className={`rounded-lg overflow-hidden border relative group ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-                <img src={currentWord.imageUrl[imageIndex]} alt={currentWord.word} className="w-full h-auto object-contain max-h-64" />
+              <div
+                className={`rounded-lg overflow-hidden border relative group cursor-pointer ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}
+                onClick={(e) => { if (!e.target.closest('button')) onPlay?.(currentWord); }}
+              >
+                <WordImage
+                  src={currentWord.imageUrl[imageIndex]}
+                  alt={currentWord.word}
+                  keyword={currentWord.word}
+                  theme={theme}
+                  className="w-full h-auto object-contain max-h-64"
+                />
 
                 {/* 删除按钮 - 右上角，悬停时显示 */}
                 <button
-                  onClick={handleDeleteImage}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleDeleteImage(); }}
                   className={`absolute top-2 right-2 p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100
                     ${theme === 'dark'
                       ? 'bg-red-500/80 hover:bg-red-600 text-white'
@@ -1072,7 +1232,8 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
                 {imageCount > 1 && (
                   <>
                     <button
-                      onClick={prevImage}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); prevImage(); }}
                       className={`absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-all
                         ${theme === 'dark' ? 'bg-gray-900/80 hover:bg-gray-800 text-white' : 'bg-white/80 hover:bg-white text-gray-800'}
                       `}
@@ -1080,7 +1241,8 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={nextImage}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); nextImage(); }}
                       className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-all
                         ${theme === 'dark' ? 'bg-gray-900/80 hover:bg-gray-800 text-white' : 'bg-white/80 hover:bg-white text-gray-800'}
                       `}
@@ -1124,39 +1286,24 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
                     <button
                       key={label}
                       onClick={() => {
-                        // 取消当前播放
-                        speechSynthesis.cancel();
-
-                        // 设置播放状态
+                        stopWordPlayback();
                         setPlayingForm(form);
-
-                        // 短暂延迟确保UI更新
-                        setTimeout(() => {
-                          const utterance = new SpeechSynthesisUtterance(form);
-
-                          // 使用最佳语音（与主播放按钮相同的逻辑）
-                          const bestVoice = getBestEnglishVoice();
-                          if (bestVoice) {
-                            utterance.voice = bestVoice;
-                          }
-
-                          utterance.lang = 'en-US';
-                          utterance.rate = 1.0;      // 正常语速
-                          utterance.pitch = 0.95;    // 稍微降低音调，更自然
-                          utterance.volume = 1.0;
-
-                          // 播放结束时清除状态
-                          utterance.onend = () => {
-                            setPlayingForm(null);
+                        runAfterUnlock(() => {
+                          const fallback = () => {
+                            speechSynthesis.cancel();
+                            const utterance = new SpeechSynthesisUtterance(form);
+                            const bestVoice = getBestEnglishVoice();
+                            if (bestVoice) utterance.voice = bestVoice;
+                            utterance.lang = 'en-US';
+                            utterance.rate = 1.0;
+                            utterance.pitch = 0.95;
+                            utterance.volume = 1.0;
+                            utterance.onend = () => setPlayingForm(null);
+                            utterance.onerror = () => setPlayingForm(null);
+                            speechSynthesis.speak(utterance);
                           };
-
-                          utterance.onerror = () => {
-                            setPlayingForm(null);
-                          };
-
-                          // 播放
-                          speechSynthesis.speak(utterance);
-                        }, 50);
+                          playWithGoogleTTS(form, () => setPlayingForm(null), fallback);
+                        });
                       }}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer flex items-center gap-1
                         ${playingForm === form
@@ -1185,12 +1332,18 @@ function WordDetailModal({ word, theme, onClose, onDelete, onPlay, onWordUpdate,
             );
           })()}
 
-          {/* 底部信息 */}
+          {/* 底部：播放按钮 + 操作图标 */}
           <div className={`p-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-            <div className="flex items-center justify-between">
-              <div className={`text-xs ${theme === 'dark' ? 'text-gray-600' : 'text-gray-500'}`}>
-                添加于 {new Date(word.createdAt).toLocaleString('zh-CN')}
-              </div>
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onPlay?.(currentWord); }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all bg-primary text-white hover:bg-primary-hover"
+                title="播放单词"
+              >
+                <Volume2 className="w-4 h-4" />
+                播放单词
+              </button>
               <div className="flex items-center gap-2">
                 {/* 重新生成释义按钮 */}
                 <button
