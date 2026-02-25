@@ -1,8 +1,38 @@
 import React, { useEffect } from 'react';
 import { X, Calendar, Sparkles, Bug, Zap, Image, Settings } from 'lucide-react';
+import VERSION from '../config/version';
 
 // 更新记录数据（按时间倒序，最新在前）
 const CHANGELOG = [
+  {
+    date: '2026-02-25',
+    version: 'v1.12.4',
+    name: '图片永久保存',
+    items: [
+      { type: 'feature', icon: Image, text: 'AI 生成图片自动转 Base64 永久保存，避免 CDN 链接过期' },
+      { type: 'feature', icon: Settings, text: '设置页新增「CDN 图片永久化」一键转换功能' },
+      { type: 'feature', icon: Zap, text: '显示图片存储统计（CDN 数量 vs 永久保存数量）' },
+    ]
+  },
+  {
+    date: '2026-02-25',
+    version: 'v1.12.3',
+    name: '配图加载容错',
+    items: [
+      { type: 'fix', icon: Bug, text: '图片加载失败时显示关键词占位符，不再显示破损图片' },
+      { type: 'improvement', icon: Image, text: '新增 WordImage 组件，统一处理图片加载状态' },
+    ]
+  },
+  {
+    date: '2026-02-13',
+    version: 'v1.12.2',
+    name: '音频与消消乐修复',
+    items: [
+      { type: 'fix', icon: Bug, text: '单词音频播放修复：整段播放放入 runAfterUnlock，Chrome 下恢复发音' },
+      { type: 'fix', icon: Bug, text: '单词消消乐使用 Portal 挂载到 body，解决点击后空白页' },
+      { type: 'improvement', icon: Zap, text: '消消乐按钮浅色主题 hover 样式修正' },
+    ]
+  },
   {
     date: '2026-02-13',
     version: 'v1.12.1',
@@ -213,7 +243,6 @@ const CHANGELOG = [
     version: 'v1.4.0',
     items: [
       { type: 'feature', icon: Sparkles, text: 'Obsidian 自动同步功能' },
-      { type: 'feature', icon: Zap, text: 'Command+R 快捷刷新释义' },
     ]
   },
   {
@@ -365,13 +394,18 @@ function ChangelogModal({ onClose, theme }) {
         <div className={`sticky top-0 z-10 flex items-center justify-between p-5 border-b
           ${theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}
         `}>
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-primary/20' : 'bg-primary/10'}`}>
-              <Calendar className={`w-5 h-5 ${theme === 'dark' ? 'text-primary-light' : 'text-primary'}`} />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-primary/20' : 'bg-primary/10'}`}>
+                <Calendar className={`w-5 h-5 ${theme === 'dark' ? 'text-primary-light' : 'text-primary'}`} />
+              </div>
+              <h2 className={`text-xl font-semibold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                更新记录
+              </h2>
             </div>
-            <h2 className={`text-xl font-semibold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-              更新记录
-            </h2>
+            <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+              当前版本：{VERSION.fullVersion} · {VERSION.name}
+            </p>
           </div>
           <button
             onClick={onClose}

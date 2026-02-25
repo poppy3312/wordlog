@@ -1,8 +1,8 @@
 # WordLog
 
-> 单词收藏助手 - Chrome 插件 + Web 应用
+> 我的单词，随手记。—— Chrome 插件 + Web 应用
 
-[![Version](https://img.shields.io/badge/version-v1.12.1-orange)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v1.12.4-orange)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ## 📸 界面预览
@@ -13,7 +13,7 @@
 
 ## 🎯 简介
 
-WordLog 是一个简洁实用的单词收藏工具，帮助你快速收藏和学习英语单词。
+WordLog：**我的单词，随手记。** 一个简洁实用的单词收藏工具，帮助你快速收藏和学习英语单词。
 
 - **Chrome 插件**: 浏览时快速添加单词
 - **Web 应用**: 完整的单词管理功能
