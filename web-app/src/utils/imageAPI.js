@@ -1,6 +1,7 @@
-// 单词配图生成服务 v2.0
+// 单词配图生成服务 v2.1
 // 优先使用 MiniMax 文生图（image-01），未配置时回退智谱 CogView
 // 支持风格：REAL/CLAY/PENGUIN/INK/MINI/FLAT/RETRO 等
+// v2.1: 生成后自动下载转 Base64，避免 CDN 链接过期
 
 /** 智谱 CogView Key：仅在没有配置 MiniMax 时使用 */
 const GLM_IMAGE_API_KEY = '8dac85c3e1764785b751b10f375b67de.cp2kBrj5Ua0JysG7';
@@ -13,6 +14,101 @@ function getImageApiConfig() {
   } catch {
     return {};
   }
+}
+
+/**
+ * 下载图片 URL 并转换为 Base64 Data URL
+ * @param {string} imageUrl - 图片 URL
+ * @param {number} maxSize - 最大尺寸（默认 600px）
+ * @param {number} quality - 压缩质量（默认 0.75）
+ * @returns {Promise<string|null>} Base64 Data URL 或 null（失败时）
+ */
+async function downloadImageAsBase64(imageUrl, maxSize = 600, quality = 0.75) {
+  if (!imageUrl) return null;
+
+  try {
+    // 尝试通过 fetch 下载图片
+    const response = await fetch(imageUrl, {
+      mode: 'cors',
+      credentials: 'omit',
+    });
+
+    if (!response.ok) {
+      console.warn(`[图片下载] HTTP 错误: ${response.status}`);
+      return null;
+    }
+
+    const blob = await response.blob();
+
+    // 使用 Canvas 压缩图片
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            // 计算缩放比例
+            if (width > height) {
+              if (width > maxSize) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+              }
+            } else {
+              if (height > maxSize) {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // 转换为压缩后的 Data URL
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            console.log(`[图片下载] 成功转换为 Base64，原始尺寸: ${img.width}x${img.height}，压缩后: ${width}x${height}`);
+            resolve(dataUrl);
+          } catch (err) {
+            console.warn('[图片下载] Canvas 处理失败:', err);
+            resolve(null);
+          }
+        };
+        img.onerror = () => {
+          console.warn('[图片下载] 图片加载失败');
+          resolve(null);
+        };
+        img.src = e.target.result;
+      };
+      reader.onerror = () => {
+        console.warn('[图片下载] FileReader 失败');
+        resolve(null);
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    // CORS 错误或其他网络错误
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      console.warn('[图片下载] CORS 限制，无法下载图片，将保留原始 URL');
+    } else {
+      console.warn('[图片下载] 下载失败:', error.message);
+    }
+    return null;
+  }
+}
+
+/**
+ * 检查 URL 是否为 Base64 Data URL
+ * @param {string} url - URL 字符串
+ * @returns {boolean}
+ */
+function isBase64Url(url) {
+  return url && url.startsWith('data:image');
 }
 
 /**
@@ -211,28 +307,50 @@ async function generateWordImageGLM(word, partOfSpeech, definition, maxRetries =
 
 /**
  * 生成单词配图：优先 MiniMax（需在配置页填 MiniMax API Key），否则用智谱
+ * v2.1: 生成后自动下载转 Base64，避免 CDN 链接过期
  * @param {string} word - 单词
  * @param {string} partOfSpeech - 词性
  * @param {string} definition - 释义
  * @param {number} maxRetries - 最大重试次数（默认3次）
- * @returns {Promise<string|null>} 图片URL
+ * @returns {Promise<string|null>} 图片URL（优先返回 Base64，失败时返回原始 URL）
  */
 export async function generateWordImage(word, partOfSpeech, definition, maxRetries = 3) {
   const config = getImageApiConfig();
   const minimaxKey = config.minimaxApiKey;
 
+  let imageUrl = null;
+
   if (minimaxKey) {
     console.log(`🎨 为 ${word} 生成配图（MiniMax image-01）`);
-    const url = await generateWordImageMiniMax(word, partOfSpeech, definition, minimaxKey);
-    if (url) {
-      console.log(`✅ 已生成 ${word} 的配图`);
-      return url;
+    imageUrl = await generateWordImageMiniMax(word, partOfSpeech, definition, minimaxKey);
+    if (imageUrl) {
+      console.log(`✅ 已生成 ${word} 的配图 URL`);
+    } else {
+      console.warn('MiniMax 生图未返回，回退智谱');
     }
-    console.warn('MiniMax 生图未返回，回退智谱');
   }
 
-  console.log(`🎨 为 ${word} 生成配图（智谱 CogView）`);
-  return generateWordImageGLM(word, partOfSpeech, definition, maxRetries);
+  if (!imageUrl) {
+    console.log(`🎨 为 ${word} 生成配图（智谱 CogView）`);
+    imageUrl = await generateWordImageGLM(word, partOfSpeech, definition, maxRetries);
+  }
+
+  if (!imageUrl) {
+    return null;
+  }
+
+  // 尝试下载并转换为 Base64（避免 CDN 链接过期）
+  console.log(`📥 正在下载图片并转换为 Base64...`);
+  const base64Url = await downloadImageAsBase64(imageUrl);
+
+  if (base64Url) {
+    console.log(`✅ 图片已转换为 Base64，永久保存`);
+    return base64Url;
+  }
+
+  // 转换失败，返回原始 URL（兼容旧逻辑）
+  console.log(`⚠️ Base64 转换失败，使用原始 CDN URL`);
+  return imageUrl;
 }
 
 /**
@@ -288,4 +406,126 @@ export async function batchGenerateImages(words, onProgress, forceRegenerate = f
   }
 
   return { words: results, successCount, failCount };
+}
+
+/**
+ * 批量将 CDN URL 图片转换为 Base64（修复已失效的图片）
+ * @param {Array} words - 单词数组
+ * @param {Function} onProgress - 进度回调函数 (current, total, currentWord)
+ * @returns {Promise<{ words: Array, convertedCount: number, failedCount: number }>}
+ */
+export async function batchConvertImagesToBase64(words, onProgress) {
+  const results = [];
+  let convertedCount = 0;
+  let failedCount = 0;
+
+  // 只处理 CDN URL 图片（非 Base64）
+  const wordsWithCdnImages = words.filter(w => {
+    if (!w.imageUrl || w.imageUrl.length === 0) return false;
+    // 检查是否有非 Base64 的图片 URL
+    return w.imageUrl.some(url => url && !isBase64Url(url));
+  });
+
+  console.log(`[批量转换] 发现 ${wordsWithCdnImages.length} 个单词需要转换 CDN 图片`);
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+
+    if (onProgress) {
+      onProgress(i + 1, words.length, word.word);
+    }
+
+    // 如果没有图片或已经是 Base64，直接保留
+    if (!word.imageUrl || word.imageUrl.length === 0) {
+      results.push(word);
+      continue;
+    }
+
+    // 检查是否需要转换
+    const needsConversion = word.imageUrl.some(url => url && !isBase64Url(url));
+
+    if (!needsConversion) {
+      results.push(word);
+      continue;
+    }
+
+    // 尝试转换每个图片 URL
+    const convertedImages = [];
+    let wordConverted = false;
+    let wordFailed = false;
+
+    for (const imageUrl of word.imageUrl) {
+      if (!imageUrl) continue;
+
+      if (isBase64Url(imageUrl)) {
+        // 已经是 Base64，保留
+        convertedImages.push(imageUrl);
+      } else {
+        // 尝试下载并转换
+        const base64Url = await downloadImageAsBase64(imageUrl);
+        if (base64Url) {
+          convertedImages.push(base64Url);
+          wordConverted = true;
+          console.log(`✅ [${word.word}] 图片已转换为 Base64`);
+        } else {
+          // 转换失败，保留原始 URL（可能会失效）
+          convertedImages.push(imageUrl);
+          wordFailed = true;
+          console.warn(`⚠️ [${word.word}] 图片转换失败，保留原始 URL`);
+        }
+      }
+    }
+
+    results.push({
+      ...word,
+      imageUrl: convertedImages
+    });
+
+    if (wordConverted) convertedCount++;
+    if (wordFailed) failedCount++;
+
+    // 添加短暂延迟，避免请求过快
+    await sleep(300);
+  }
+
+  console.log(`[批量转换] 完成：成功 ${convertedCount}，失败 ${failedCount}`);
+  return { words: results, convertedCount, failedCount };
+}
+
+/**
+ * 检查单词的图片是否为 CDN URL（可能失效）
+ * @param {Object} word - 单词对象
+ * @returns {boolean} 是否包含 CDN URL 图片
+ */
+export function hasCdnImage(word) {
+  if (!word.imageUrl || word.imageUrl.length === 0) return false;
+  return word.imageUrl.some(url => url && !isBase64Url(url));
+}
+
+/**
+ * 统计词本中 CDN URL 图片的数量
+ * @param {Array} words - 单词数组
+ * @returns {{ total: number, cdnCount: number, base64Count: number }}
+ */
+export function analyzeImageStorage(words) {
+  let cdnCount = 0;
+  let base64Count = 0;
+
+  for (const word of words) {
+    if (!word.imageUrl || word.imageUrl.length === 0) continue;
+    for (const url of word.imageUrl) {
+      if (!url) continue;
+      if (isBase64Url(url)) {
+        base64Count++;
+      } else {
+        cdnCount++;
+      }
+    }
+  }
+
+  return {
+    total: cdnCount + base64Count,
+    cdnCount,
+    base64Count
+  };
 }

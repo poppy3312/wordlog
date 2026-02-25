@@ -2,9 +2,9 @@
 export const VERSION = {
   major: 1,
   minor: 12,
-  patch: 3,
+  patch: 4,
   build: '20260225',
-  name: '配图加载容错',
+  name: '图片永久保存',
 
   // 完整版本号
   get fullVersion() {

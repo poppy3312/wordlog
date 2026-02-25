@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, Trash2, Info, RefreshCw, Upload, ChevronRight, Cloud, FileText } from 'lucide-react';
+import { X, Download, Trash2, Info, RefreshCw, Upload, ChevronRight, Cloud, FileText, Image } from 'lucide-react';
 import { useWordStore } from '../store/useWordStore';
 import { importWordsFromTxt, importWordsFromCsv } from '../utils/export';
+import { batchConvertImagesToBase64, analyzeImageStorage } from '../utils/imageAPI';
 import VERSION from '../config/version';
 import ChangelogModal from './ChangelogModal';
 
@@ -16,6 +17,8 @@ function SettingsModal({ onClose, showToast, onRefreshDefinitions, onExport }) {
   const [confirmDelete, setConfirmDelete] = useState(false); // 二次确认状态
   const [showChangelog, setShowChangelog] = useState(false); // 显示更新记录
   const [exportScope, setExportScope] = useState('all'); // 导出范围：all | noImage
+  const [isConvertingImages, setIsConvertingImages] = useState(false); // CDN 图片转换中
+  const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0 });
 
   // ESC 键关闭
   useEffect(() => {
@@ -201,6 +204,54 @@ function SettingsModal({ onClose, showToast, onRefreshDefinitions, onExport }) {
     const input = document.getElementById('image-import-input');
     if (input) {
       input.click();
+    }
+  };
+
+  // CDN 图片转换为 Base64
+  const handleConvertImagesToBase64 = async () => {
+    const stats = analyzeImageStorage(words);
+    if (stats.cdnCount === 0) {
+      showToast('info', '没有需要转换的 CDN 图片');
+      return;
+    }
+
+    if (!confirm(`检测到 ${stats.cdnCount} 张 CDN 图片，是否转换为 Base64 永久保存？\n\n注意：转换过程需要下载图片，请保持网络畅通。`)) {
+      return;
+    }
+
+    setIsConvertingImages(true);
+    setConvertProgress({ current: 0, total: words.length });
+
+    try {
+      const { words: updatedWords, convertedCount, failedCount } = await batchConvertImagesToBase64(
+        words,
+        (current, total, word) => {
+          setConvertProgress({ current, total });
+        }
+      );
+
+      // 更新 store
+      setWords(updatedWords);
+
+      // 保存到存储
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        const { saveToChromeStorage } = await import('../utils/chromeStorage');
+        await saveToChromeStorage(updatedWords);
+      } else {
+        localStorage.setItem('wordlog_words', JSON.stringify(updatedWords));
+      }
+
+      if (failedCount > 0) {
+        showToast('warning', `转换完成：成功 ${convertedCount} 张，失败 ${failedCount} 张（可能已过期）`);
+      } else {
+        showToast('success', `转换完成！已将 ${convertedCount} 张图片永久保存`);
+      }
+    } catch (error) {
+      console.error('CDN 图片转换失败:', error);
+      showToast('error', '转换失败，请重试');
+    } finally {
+      setIsConvertingImages(false);
+      setConvertProgress({ current: 0, total: 0 });
     }
   };
 
@@ -419,6 +470,57 @@ function SettingsModal({ onClose, showToast, onRefreshDefinitions, onExport }) {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* CDN 图片转换 */}
+              <div className={`p-4 rounded-lg border ${theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                      <Image className="w-4 h-4 inline mr-1" />
+                      CDN 图片永久化
+                    </div>
+                    <div className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                      将 CDN 图片转为 Base64，避免链接过期失效
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleConvertImagesToBase64}
+                    disabled={isConvertingImages}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
+                      ${isConvertingImages
+                        ? 'opacity-50 cursor-not-allowed bg-gray-400'
+                        : 'bg-primary text-white hover:bg-primary-hover'
+                      }`}
+                  >
+                    <Cloud className="w-4 h-4" />
+                    {isConvertingImages ? '转换中...' : '一键转换'}
+                  </button>
+                </div>
+                {/* 转换进度 */}
+                {isConvertingImages && convertProgress.total > 0 && (
+                  <div className={`mt-2 text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all duration-300"
+                          style={{ width: `${(convertProgress.current / convertProgress.total) * 100}%` }}
+                        />
+                      </div>
+                      <span>{convertProgress.current}/{convertProgress.total}</span>
+                    </div>
+                  </div>
+                )}
+                {/* 统计信息 */}
+                {(() => {
+                  const stats = analyzeImageStorage(words);
+                  if (stats.total === 0) return null;
+                  return (
+                    <div className={`mt-2 text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                      当前图片：{stats.total} 张（CDN: {stats.cdnCount}，永久: {stats.base64Count}）
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* TXT 单词导入 */}
